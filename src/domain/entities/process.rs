@@ -13,7 +13,7 @@ pub struct ProcessInfo {
     pub vms_mb: u64,
     pub user: String,
     pub start_time: u64,
-    pub open_fds: usize,
+    pub open_fds: u64,
 }
 
 /// State of a process as reported by the OS

@@ -27,8 +27,6 @@ pub struct SuggestedAction {
 #[allow(clippy::expect_used)]
 mod tests {
     use super::*;
-    use crate::domain::value_objects::action_risk::ActionRisk;
-    use crate::domain::value_objects::severity::Severity;
     use chrono::Utc;
 
     #[test]

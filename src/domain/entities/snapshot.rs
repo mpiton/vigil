@@ -33,7 +33,7 @@ pub struct MemoryInfo {
 pub struct CpuInfo {
     pub global_usage_percent: f32,
     pub per_core_usage: Vec<f32>,
-    pub core_count: usize,
+    pub core_count: u32,
     pub load_avg_1m: f64,
     pub load_avg_5m: f64,
     pub load_avg_15m: f64,

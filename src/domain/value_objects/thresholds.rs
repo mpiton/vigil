@@ -12,9 +12,9 @@ pub struct ThresholdSet {
     /// Swap usage percentage that triggers a critical alert
     pub swap_critical: f64,
     /// CPU usage percentage that triggers a warning
-    pub cpu_warning: f32,
+    pub cpu_warning: f64,
     /// CPU usage percentage that triggers a critical alert
-    pub cpu_critical: f32,
+    pub cpu_critical: f64,
     /// Disk usage percentage that triggers a warning
     pub disk_warning: f64,
     /// Disk usage percentage that triggers a critical alert
@@ -55,7 +55,6 @@ mod tests {
         let original = ThresholdSet::default();
         let json = serde_json::to_string(&original).expect("serialize");
         let deserialized: ThresholdSet = serde_json::from_str(&json).expect("deserialize");
-        assert!((original.ram_warning - deserialized.ram_warning).abs() < f64::EPSILON);
-        assert!((original.ram_critical - deserialized.ram_critical).abs() < f64::EPSILON);
+        assert_eq!(original, deserialized);
     }
 }
