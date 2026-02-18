@@ -491,6 +491,36 @@ interval_secs = 42
     }
 
     #[test]
+    #[allow(unsafe_code)]
+    fn load_and_save_use_default_config_path() {
+        let dir = tempfile::tempdir().expect("create tempdir");
+        let original = std::env::var("XDG_CONFIG_HOME").ok();
+
+        // SAFETY: single-threaded test; we restore the env var after.
+        unsafe { std::env::set_var("XDG_CONFIG_HOME", dir.path()) };
+
+        // load() should create default when file is missing
+        let config = AppConfig::load().expect("load default");
+        assert_eq!(config.general.mode, OperationMode::Suggest);
+        assert_eq!(config.ai.provider, "claude-cli");
+
+        // File should now exist at the default path
+        let expected_path = dir.path().join("vigil").join("config.toml");
+        assert!(expected_path.exists());
+
+        // save() should overwrite the file
+        config.save().expect("save");
+        let reloaded = AppConfig::load().expect("reload");
+        assert_eq!(reloaded.general.mode, config.general.mode);
+
+        // Restore env var
+        match original {
+            Some(val) => unsafe { std::env::set_var("XDG_CONFIG_HOME", val) },
+            None => unsafe { std::env::remove_var("XDG_CONFIG_HOME") },
+        }
+    }
+
+    #[test]
     fn load_from_nonexistent_file_fails() {
         let result = AppConfig::load_from(Path::new("/nonexistent/config.toml"));
         assert!(result.is_err());
