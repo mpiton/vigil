@@ -3,8 +3,7 @@
 **/*.rs.bk
 *.pdb
 
-# Dependencies
-Cargo.lock
+# Dependencies (Cargo.lock is committed for binary crates)
 
 # Environment & secrets
 .env
