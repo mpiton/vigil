@@ -1,0 +1,38 @@
+# Vigil — Configuration de référence
+# Copier vers ~/.config/vigil/config.toml pour personnaliser
+
+[general]
+mode = "suggest"           # observe | suggest | auto
+interval_secs = 5          # Intervalle de collecte en secondes
+language = "fr"            # Langue des messages
+
+[thresholds]
+ram_warn_percent = 80.0
+ram_critical_percent = 90.0
+swap_warn_percent = 40.0
+cpu_load_factor = 2.0      # Facteur x nombre de coeurs
+disk_min_free_percent = 10.0
+max_duplicate_processes = 5
+zombie_timeout_secs = 300
+temperature_cpu_max = 85.0
+temperature_gpu_max = 80.0
+
+[ai]
+enabled = true
+provider = "claude-cli"    # claude-cli | ollama | noop
+model = "claude-sonnet-4-20250514"
+cooldown_secs = 60
+# ollama_url = "http://localhost:11434"  # Décommenter pour ollama
+
+[notifications]
+desktop = true
+terminal = true
+# log_file = "/var/log/vigil/alerts.json"
+# webhook_url = "https://hooks.slack.com/..."
+
+[database]
+path = "~/.local/share/vigil/vigil.db"
+
+[allowlist]
+ignore_commands = ["systemd", "dbus-daemon", "Xorg", "Xwayland"]
+protected_commands = ["sshd", "systemd", "dbus-daemon", "NetworkManager"]
