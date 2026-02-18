@@ -15,6 +15,27 @@ const BYTES_PER_GB: f64 = 1_073_741_824.0;
 /// Filesystem types to exclude from disk metrics.
 const PSEUDO_FILESYSTEMS: &[&str] = &["tmpfs", "devtmpfs", "sysfs", "proc", "cgroup2", "overlay"];
 
+/// Returns `(numerator / denominator) * 100.0`, or `0.0` when `denominator` is zero.
+#[allow(clippy::cast_precision_loss)]
+fn safe_percent(numerator: u64, denominator: u64) -> f64 {
+    if denominator > 0 {
+        (numerator as f64 / denominator as f64) * 100.0
+    } else {
+        0.0
+    }
+}
+
+/// Returns the arithmetic mean of `per_core` usages, or `0.0` when the slice is empty.
+#[allow(clippy::cast_precision_loss)]
+fn avg_cpu_usage(per_core: &[f32]) -> f32 {
+    let count = per_core.len();
+    if count > 0 {
+        per_core.iter().sum::<f32>() / count as f32
+    } else {
+        0.0
+    }
+}
+
 /// Collects system metrics using the `sysinfo` crate.
 ///
 /// Uses `Mutex<System>` for interior mutability since the `SystemCollector`
@@ -67,7 +88,6 @@ impl SystemCollector for SysinfoCollector {
     }
 }
 
-#[allow(clippy::cast_precision_loss)]
 fn collect_memory(sys: &System) -> MemoryInfo {
     let total = sys.total_memory();
     let used = sys.used_memory();
@@ -75,40 +95,22 @@ fn collect_memory(sys: &System) -> MemoryInfo {
     let swap_total = sys.total_swap();
     let swap_used = sys.used_swap();
 
-    let usage_percent = if total > 0 {
-        (used as f64 / total as f64) * 100.0
-    } else {
-        0.0
-    };
-
-    let swap_percent = if swap_total > 0 {
-        (swap_used as f64 / swap_total as f64) * 100.0
-    } else {
-        0.0
-    };
-
     MemoryInfo {
         total_mb: total / BYTES_PER_MB,
         used_mb: used / BYTES_PER_MB,
         available_mb: available / BYTES_PER_MB,
         swap_total_mb: swap_total / BYTES_PER_MB,
         swap_used_mb: swap_used / BYTES_PER_MB,
-        usage_percent,
-        swap_percent,
+        usage_percent: safe_percent(used, total),
+        swap_percent: safe_percent(swap_used, swap_total),
     }
 }
 
-#[allow(clippy::cast_precision_loss)]
 fn collect_cpu(sys: &System) -> CpuInfo {
     let cpus = sys.cpus();
     let per_core_usage: Vec<f32> = cpus.iter().map(sysinfo::Cpu::cpu_usage).collect();
     let core_count = u32::try_from(cpus.len()).unwrap_or(u32::MAX);
-
-    let global_usage = if core_count > 0 {
-        per_core_usage.iter().sum::<f32>() / core_count as f32
-    } else {
-        0.0
-    };
+    let global_usage = avg_cpu_usage(&per_core_usage);
 
     let load_avg = System::load_average();
 
@@ -367,18 +369,40 @@ mod tests {
     }
 
     #[test]
-    fn swap_percent_zero_when_no_swap() {
-        // If swap_total is 0, swap_percent should be 0.0
-        // This tests the division-by-zero guard
-        let collector = SysinfoCollector::new();
-        let snapshot = collector.collect().expect("collect should succeed");
+    fn safe_percent_returns_zero_for_zero_denominator() {
+        assert!((safe_percent(100, 0) - 0.0).abs() < f64::EPSILON);
+        assert!((safe_percent(0, 0) - 0.0).abs() < f64::EPSILON);
+    }
 
-        if snapshot.memory.swap_total_mb == 0 {
-            assert!(
-                (snapshot.memory.swap_percent - 0.0).abs() < f64::EPSILON,
-                "swap_percent should be 0 when no swap"
-            );
-        }
+    #[test]
+    fn safe_percent_computes_correctly() {
+        assert!((safe_percent(50, 100) - 50.0).abs() < f64::EPSILON);
+        assert!((safe_percent(1, 4) - 25.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn avg_cpu_usage_returns_zero_for_empty_slice() {
+        assert!((avg_cpu_usage(&[]) - 0.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn avg_cpu_usage_computes_mean() {
+        let usage = avg_cpu_usage(&[10.0, 20.0, 30.0]);
+        assert!((usage - 20.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn collect_returns_error_on_poisoned_mutex() {
+        let collector = SysinfoCollector::new();
+
+        // Poison the mutex by panicking while holding the lock guard.
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = collector.sys.lock().expect("not yet poisoned");
+            panic!("intentional panic to poison the mutex");
+        }));
+
+        let result = collector.collect();
+        assert!(result.is_err(), "collect should fail on poisoned mutex");
     }
 
     #[test]
