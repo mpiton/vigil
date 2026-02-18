@@ -173,15 +173,11 @@ fn collect_disks(disks: &Disks) -> Vec<DiskInfo> {
             !PSEUDO_FILESYSTEMS.iter().any(|&pseudo| fs == pseudo) && d.total_space() > 0
         })
         .map(|disk| {
+            // total > 0 guaranteed by the filter above
             let total = disk.total_space();
             let available = disk.available_space();
             let used = total.saturating_sub(available);
-
-            let usage_percent = if total > 0 {
-                (used as f64 / total as f64) * 100.0
-            } else {
-                0.0
-            };
+            let usage_percent = (used as f64 / total as f64) * 100.0;
 
             DiskInfo {
                 mount_point: disk.mount_point().to_string_lossy().to_string(),
@@ -332,6 +328,14 @@ mod tests {
             map_process_status(sysinfo::ProcessStatus::Wakekill),
             ProcessState::Sleeping
         );
+        assert_eq!(
+            map_process_status(sysinfo::ProcessStatus::Unknown(999)),
+            ProcessState::Unknown
+        );
+        assert_eq!(
+            map_process_status(sysinfo::ProcessStatus::LockBlocked),
+            ProcessState::Unknown
+        );
     }
 
     #[test]
@@ -382,5 +386,34 @@ mod tests {
         let collector = SysinfoCollector::default();
         let snapshot = collector.collect().expect("default collector should work");
         assert!(snapshot.memory.total_mb > 0);
+    }
+
+    #[test]
+    fn kernel_threads_have_bracket_wrapped_names() {
+        let collector = SysinfoCollector::new();
+        let snapshot = collector.collect().expect("collect should succeed");
+
+        // Kernel threads have empty cmd() so their cmdline is wrapped in brackets
+        assert!(
+            snapshot
+                .processes
+                .iter()
+                .any(|p| p.cmdline.starts_with('[') && p.cmdline.ends_with(']')),
+            "should have kernel threads with bracket-wrapped names"
+        );
+    }
+
+    #[test]
+    fn disks_have_positive_total_space() {
+        let collector = SysinfoCollector::new();
+        let snapshot = collector.collect().expect("collect should succeed");
+
+        for disk in &snapshot.disks {
+            assert!(
+                disk.total_gb > 0.0,
+                "disk {mp} should have positive total space",
+                mp = disk.mount_point
+            );
+        }
     }
 }
