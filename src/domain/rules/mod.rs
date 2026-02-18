@@ -21,6 +21,20 @@ pub trait Rule: Send + Sync {
     fn evaluate(&self, snapshot: &SystemSnapshot, thresholds: &ThresholdSet) -> Vec<Alert>;
 }
 
+/// Returns all default Level 1 deterministic rules
+#[must_use]
+pub fn default_rules() -> Vec<Box<dyn Rule>> {
+    vec![
+        Box::new(ram::RamWarningRule),
+        Box::new(ram::RamCriticalRule),
+        Box::new(cpu::CpuOverloadRule),
+        Box::new(swap::SwapWarningRule),
+        Box::new(zombie::ZombieProcessRule),
+        Box::new(disk::DiskSpaceRule),
+        Box::new(oom::OomKillerRule),
+    ]
+}
+
 /// Engine that runs a collection of rules against system snapshots
 pub struct RuleEngine {
     rules: Vec<Box<dyn Rule>>,
@@ -168,5 +182,27 @@ mod tests {
         ]);
         let alerts = engine.analyze(&make_snapshot(), &ThresholdSet::default());
         assert_eq!(alerts.len(), 2);
+    }
+
+    #[test]
+    fn default_rules_returns_all_level1_rules() {
+        let rules = default_rules();
+        assert_eq!(rules.len(), 7);
+        let names: Vec<&str> = rules.iter().map(|r| r.name()).collect();
+        assert!(names.contains(&"ram_warning"));
+        assert!(names.contains(&"ram_critical"));
+        assert!(names.contains(&"cpu_overload"));
+        assert!(names.contains(&"swap_warning"));
+        assert!(names.contains(&"zombie_processes"));
+        assert!(names.contains(&"disk_space_low"));
+        assert!(names.contains(&"oom_killer"));
+    }
+
+    #[test]
+    fn default_rules_produce_no_alerts_on_healthy_snapshot() {
+        let rules = default_rules();
+        let engine = RuleEngine::new(rules);
+        let alerts = engine.analyze(&make_snapshot(), &ThresholdSet::default());
+        assert!(alerts.is_empty());
     }
 }
