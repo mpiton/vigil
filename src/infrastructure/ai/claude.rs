@@ -109,7 +109,7 @@ impl AiAnalyzer for ClaudeCliAnalyzer {
 
 #[derive(Deserialize)]
 struct ClaudeCliResponse {
-    result: String,
+    result: serde_json::Value,
 }
 
 #[derive(Deserialize)]
@@ -130,21 +130,35 @@ fn parse_response(stdout: &[u8]) -> Result<AiDiagnostic, AnalysisError> {
     let text = std::str::from_utf8(stdout)
         .map_err(|e| AnalysisError::InvalidResponse(format!("invalid UTF-8: {e}")))?;
 
-    let inner = match serde_json::from_str::<ClaudeCliResponse>(text) {
-        Ok(envelope) => envelope.result,
+    // The Claude CLI --output-format json wraps output in {"result": ...}.
+    // The result field may be a string (containing JSON) or an object directly.
+    let diagnostic_value = match serde_json::from_str::<ClaudeCliResponse>(text) {
+        Ok(envelope) => match envelope.result {
+            serde_json::Value::String(s) => s,
+            other => {
+                let raw: RawDiagnostic = serde_json::from_value(other).map_err(|e| {
+                    AnalysisError::InvalidResponse(format!("failed to parse diagnostic: {e}"))
+                })?;
+                return Ok(to_diagnostic(raw));
+            }
+        },
         Err(_) => text.to_owned(),
     };
 
-    let raw: RawDiagnostic = serde_json::from_str(&inner)
+    let raw: RawDiagnostic = serde_json::from_str(&diagnostic_value)
         .map_err(|e| AnalysisError::InvalidResponse(format!("failed to parse diagnostic: {e}")))?;
 
-    Ok(AiDiagnostic {
+    Ok(to_diagnostic(raw))
+}
+
+fn to_diagnostic(raw: RawDiagnostic) -> AiDiagnostic {
+    AiDiagnostic {
         timestamp: Utc::now(),
         summary: raw.summary,
         details: raw.details,
         severity: raw.severity,
         confidence: raw.confidence.clamp(0.0, 1.0),
-    })
+    }
 }
 
 #[cfg(test)]
@@ -211,6 +225,15 @@ mod tests {
         );
         let diag = parse_response(envelope.as_bytes()).expect("should parse envelope");
         assert_eq!(diag.summary, "OK");
+        assert_eq!(diag.severity, Severity::Low);
+    }
+
+    #[test]
+    fn parse_claude_cli_envelope_object_result() {
+        let envelope = r#"{"type":"result","subtype":"success","result":{"summary":"OK","details":"All good","severity":"Low","confidence":0.5},"session_id":"abc"}"#;
+        let diag = parse_response(envelope.as_bytes()).expect("should parse object result");
+        assert_eq!(diag.summary, "OK");
+        assert_eq!(diag.details, "All good");
         assert_eq!(diag.severity, Severity::Low);
     }
 
