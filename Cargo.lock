@@ -2818,6 +2818,7 @@ dependencies = [
  "shellexpand",
  "sysinfo",
  "tabled",
+ "tempfile",
  "thiserror",
  "tokio",
  "toml",
