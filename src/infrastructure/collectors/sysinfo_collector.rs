@@ -210,9 +210,18 @@ const fn map_process_status(status: sysinfo::ProcessStatus) -> ProcessState {
     }
 }
 
+/// Counts open file descriptors for a process by reading `/proc/<pid>/fd`.
+///
+/// Linux-only: returns 0 on other platforms or if the directory is unreadable.
+#[cfg(target_os = "linux")]
 fn count_open_fds(pid: u32) -> u64 {
     std::fs::read_dir(format!("/proc/{pid}/fd"))
         .map_or(0, |entries| entries.filter_map(Result::ok).count() as u64)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn count_open_fds(_pid: u32) -> u64 {
+    0
 }
 
 #[cfg(test)]
@@ -326,6 +335,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "linux")]
     fn fd_count_for_own_process() {
         let my_pid = std::process::id();
         let fds = count_open_fds(my_pid);
