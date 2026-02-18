@@ -278,4 +278,10 @@ mod tests {
         assert!(actions[0].command.contains("kill 100"));
         assert!(!actions[0].command.contains("kill 1 "));
     }
+
+    #[test]
+    fn rule_names() {
+        assert_eq!(RamWarningRule.name(), "ram_warning");
+        assert_eq!(RamCriticalRule.name(), "ram_critical");
+    }
 }

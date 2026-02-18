@@ -117,16 +117,20 @@ mod tests {
 
     #[test]
     fn engine_with_noop_rule_returns_empty() {
-        let engine = RuleEngine::new(vec![Box::new(NoopRule)]);
+        let noop = NoopRule;
+        assert_eq!(noop.name(), "noop");
+        let engine = RuleEngine::new(vec![Box::new(noop)]);
         let alerts = engine.analyze(&make_snapshot(), &ThresholdSet::default());
         assert!(alerts.is_empty());
     }
 
     #[test]
     fn engine_collects_alerts_from_single_rule() {
-        let engine = RuleEngine::new(vec![Box::new(FixedAlertRule {
+        let fixed = FixedAlertRule {
             severity: Severity::High,
-        })]);
+        };
+        assert_eq!(fixed.name(), "fixed");
+        let engine = RuleEngine::new(vec![Box::new(fixed)]);
         let alerts = engine.analyze(&make_snapshot(), &ThresholdSet::default());
         assert_eq!(alerts.len(), 1);
         assert_eq!(alerts[0].severity, Severity::High);
