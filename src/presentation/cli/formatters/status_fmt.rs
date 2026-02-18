@@ -101,4 +101,25 @@ mod tests {
         let result = colorize_percent(95.0);
         assert_eq!(result.to_string(), "95.0%");
     }
+
+    #[test]
+    fn progress_bar_yellow_range() {
+        disable_colors();
+        let bar = progress_bar(75.0, 10);
+        assert!(bar.contains("████████"));
+    }
+
+    #[test]
+    fn colorize_percent_yellow_range() {
+        disable_colors();
+        let result = colorize_percent(80.0);
+        assert_eq!(result.to_string(), "80.0%");
+    }
+
+    #[test]
+    fn print_section_header_does_not_panic() {
+        disable_colors();
+        print_section_header("Test Header");
+        print_section_header("💾 Mémoire RAM");
+    }
 }

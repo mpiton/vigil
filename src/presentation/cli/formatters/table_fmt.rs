@@ -102,4 +102,26 @@ mod tests {
         assert!(table.contains("NAME"));
         assert!(table.contains("RAM(MB)"));
     }
+
+    #[test]
+    fn zombie_process_highlighted() {
+        control::set_override(false);
+        let procs = vec![make_process("zombified", 100, ProcessState::Zombie)];
+        let table = format_process_table(&procs, 5);
+        assert!(table.contains("zombified"));
+    }
+
+    #[test]
+    fn long_name_truncated() {
+        control::set_override(false);
+        let procs = vec![make_process(
+            "very_long_process_name_that_exceeds",
+            100,
+            ProcessState::Running,
+        )];
+        let table = format_process_table(&procs, 5);
+        // name truncated to 19 chars
+        assert!(table.contains("very_long_process_n"));
+        assert!(!table.contains("very_long_process_name_that_exceeds"));
+    }
 }
