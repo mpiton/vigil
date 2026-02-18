@@ -70,6 +70,11 @@ mod tests {
     }
 
     #[test]
+    fn rule_name() {
+        assert_eq!(SwapWarningRule.name(), "swap_warning");
+    }
+
+    #[test]
     fn no_alert_when_swap_low() {
         let rule = SwapWarningRule;
         let snapshot = make_snapshot(8192, 1000, 12.2);

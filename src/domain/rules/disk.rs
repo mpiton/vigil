@@ -105,6 +105,11 @@ mod tests {
     }
 
     #[test]
+    fn rule_name() {
+        assert_eq!(DiskSpaceRule.name(), "disk_space_low");
+    }
+
+    #[test]
     fn no_alert_when_disks_healthy() {
         let rule = DiskSpaceRule;
         let snapshot = make_snapshot(vec![make_disk("/", 500.0, 50.0)]);

@@ -117,6 +117,11 @@ mod tests {
     }
 
     #[test]
+    fn rule_name() {
+        assert_eq!(CpuOverloadRule.name(), "cpu_overload");
+    }
+
+    #[test]
     fn no_alert_when_load_low() {
         let rule = CpuOverloadRule;
         // default factor 1.5, 4 cores → threshold 6.0; load 3.0 < 6.0

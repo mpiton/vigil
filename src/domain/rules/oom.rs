@@ -98,6 +98,11 @@ mod tests {
     }
 
     #[test]
+    fn rule_name() {
+        assert_eq!(OomKillerRule.name(), "oom_killer");
+    }
+
+    #[test]
     fn no_alert_when_no_oom_entries() {
         let rule = OomKillerRule;
         let snapshot = make_snapshot(vec![

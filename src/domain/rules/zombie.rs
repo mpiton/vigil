@@ -107,6 +107,11 @@ mod tests {
     }
 
     #[test]
+    fn rule_name() {
+        assert_eq!(ZombieProcessRule.name(), "zombie_processes");
+    }
+
+    #[test]
     fn no_alert_when_no_zombies() {
         let rule = ZombieProcessRule;
         let snapshot = make_snapshot(vec![
