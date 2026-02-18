@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
+use crate::domain::value_objects::thresholds::ThresholdSet;
 use crate::domain::value_objects::OperationMode;
 
 /// Top-level application configuration loaded from TOML.
@@ -329,6 +330,38 @@ impl AppConfig {
     }
 }
 
+impl From<&ThresholdConfig> for ThresholdSet {
+    fn from(config: &ThresholdConfig) -> Self {
+        let defaults = Self::default();
+
+        // Clamp percentages to valid range
+        let ram_warning = config.ram_warn_percent.clamp(0.0, 100.0);
+        let ram_critical = config.ram_critical_percent.clamp(0.0, 100.0);
+        let swap_warning = config.swap_warn_percent.clamp(0.0, 100.0);
+        let disk_free = config.disk_min_free_percent.clamp(0.1, 100.0);
+        let disk_warning = 100.0 - disk_free;
+
+        // Ensure disk_warning < disk_critical (minimum 1% gap)
+        let disk_critical = if disk_warning >= defaults.disk_critical {
+            (disk_warning + 1.0).min(100.0)
+        } else {
+            defaults.disk_critical
+        };
+
+        Self {
+            ram_warning,
+            ram_critical: ram_critical.max(ram_warning),
+            swap_warning,
+            swap_critical: defaults.swap_critical.max(swap_warning),
+            cpu_warning: defaults.cpu_warning,
+            cpu_critical: defaults.cpu_critical,
+            disk_warning,
+            disk_critical,
+            cpu_load_factor: config.cpu_load_factor.max(0.1),
+        }
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::expect_used)]
 mod tests {
@@ -515,6 +548,42 @@ interval_secs = 42
     }
 
     #[test]
+    fn threshold_config_clamps_out_of_range_values() {
+        let config = ThresholdConfig {
+            ram_warn_percent: 150.0,
+            ram_critical_percent: -10.0,
+            disk_min_free_percent: -5.0,
+            cpu_load_factor: -1.0,
+            ..ThresholdConfig::default()
+        };
+        let thresholds = ThresholdSet::from(&config);
+        // ram_warning clamped to 100.0, ram_critical clamped to 0.0 then raised to >= ram_warning
+        assert!(thresholds.ram_warning <= 100.0);
+        assert!(thresholds.ram_critical >= thresholds.ram_warning);
+        // disk_free clamped to 0.1, so disk_warning = 99.9
+        assert!(thresholds.disk_warning <= 99.9);
+        assert!(thresholds.disk_critical > thresholds.disk_warning);
+        // cpu_load_factor clamped to min 0.1
+        assert!(thresholds.cpu_load_factor >= 0.1);
+    }
+
+    #[test]
+    fn threshold_config_disk_inversion_prevented() {
+        // disk_min_free_percent = 3.0 → disk_warning = 97.0 > default disk_critical (95.0)
+        let config = ThresholdConfig {
+            disk_min_free_percent: 3.0,
+            ..ThresholdConfig::default()
+        };
+        let thresholds = ThresholdSet::from(&config);
+        assert!(
+            thresholds.disk_warning < thresholds.disk_critical,
+            "disk_warning ({}) must be < disk_critical ({})",
+            thresholds.disk_warning,
+            thresholds.disk_critical
+        );
+    }
+
+    #[test]
     fn load_from_nonexistent_file_fails() {
         let dir = tempfile::tempdir().expect("create tempdir");
         let missing = dir.path().join("missing-config.toml");
@@ -531,5 +600,45 @@ interval_secs = 42
 
         let result = AppConfig::load_from(tmpfile.path());
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn threshold_config_to_threshold_set_default_mapping() {
+        let config = ThresholdConfig::default();
+        let thresholds = ThresholdSet::from(&config);
+        assert!((thresholds.ram_warning - 80.0).abs() < f64::EPSILON);
+        assert!((thresholds.ram_critical - 90.0).abs() < f64::EPSILON);
+        assert!((thresholds.swap_warning - 40.0).abs() < f64::EPSILON);
+        assert!((thresholds.cpu_load_factor - 2.0).abs() < f64::EPSILON);
+        assert!((thresholds.disk_warning - 90.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn threshold_config_to_threshold_set_custom_values() {
+        let config = ThresholdConfig {
+            ram_warn_percent: 70.0,
+            ram_critical_percent: 85.0,
+            swap_warn_percent: 30.0,
+            cpu_load_factor: 3.0,
+            disk_min_free_percent: 20.0,
+            ..ThresholdConfig::default()
+        };
+        let thresholds = ThresholdSet::from(&config);
+        assert!((thresholds.ram_warning - 70.0).abs() < f64::EPSILON);
+        assert!((thresholds.ram_critical - 85.0).abs() < f64::EPSILON);
+        assert!((thresholds.swap_warning - 30.0).abs() < f64::EPSILON);
+        assert!((thresholds.cpu_load_factor - 3.0).abs() < f64::EPSILON);
+        assert!((thresholds.disk_warning - 80.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn threshold_config_preserves_unmapped_defaults() {
+        let config = ThresholdConfig::default();
+        let thresholds = ThresholdSet::from(&config);
+        let defaults = ThresholdSet::default();
+        assert!((thresholds.swap_critical - defaults.swap_critical).abs() < f64::EPSILON);
+        assert!((thresholds.cpu_warning - defaults.cpu_warning).abs() < f64::EPSILON);
+        assert!((thresholds.cpu_critical - defaults.cpu_critical).abs() < f64::EPSILON);
+        assert!((thresholds.disk_critical - defaults.disk_critical).abs() < f64::EPSILON);
     }
 }
