@@ -67,6 +67,8 @@ pub struct AiConfig {
     pub model: String,
     #[serde(default = "default_cooldown")]
     pub cooldown_secs: u64,
+    #[serde(default = "default_timeout")]
+    pub timeout_secs: u64,
     #[serde(default)]
     pub ollama_url: Option<String>,
 }
@@ -168,6 +170,10 @@ const fn default_cooldown() -> u64 {
     60
 }
 
+const fn default_timeout() -> u64 {
+    30
+}
+
 fn default_ignore_commands() -> Vec<String> {
     vec![
         "systemd".into(),
@@ -226,6 +232,7 @@ impl Default for AiConfig {
             provider: default_provider(),
             model: default_model(),
             cooldown_secs: default_cooldown(),
+            timeout_secs: default_timeout(),
             ollama_url: None,
         }
     }
