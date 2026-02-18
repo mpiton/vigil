@@ -171,7 +171,7 @@ const fn default_cooldown() -> u64 {
 }
 
 const fn default_timeout() -> u64 {
-    30
+    120
 }
 
 fn default_ignore_commands() -> Vec<String> {

@@ -76,7 +76,7 @@ impl AiAnalyzer for ClaudeCliAnalyzer {
                     "json",
                     "--model",
                     &self.model,
-                    "-p",
+                    "--",
                     &prompt,
                 ])
                 .kill_on_drop(true)
