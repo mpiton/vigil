@@ -316,9 +316,8 @@ impl AppConfig {
     /// Returns an error if the directory cannot be created,
     /// serialization fails, or the file cannot be written.
     pub fn save_to(&self, path: &Path) -> Result<()> {
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).context("Failed to create config directory")?;
-        }
+        let parent = path.parent().unwrap_or_else(|| Path::new("."));
+        std::fs::create_dir_all(parent).context("Failed to create config directory")?;
         let content = toml::to_string_pretty(self).context("Failed to serialize config")?;
         std::fs::write(path, content).context("Failed to write config file")?;
         Ok(())
@@ -494,9 +493,8 @@ interval_secs = 42
     #[allow(unsafe_code)]
     fn load_and_save_use_default_config_path() {
         let dir = tempfile::tempdir().expect("create tempdir");
-        let original = std::env::var("XDG_CONFIG_HOME").ok();
 
-        // SAFETY: single-threaded test; we restore the env var after.
+        // SAFETY: single-threaded test; we clean up after.
         unsafe { std::env::set_var("XDG_CONFIG_HOME", dir.path()) };
 
         // load() should create default when file is missing
@@ -513,16 +511,14 @@ interval_secs = 42
         let reloaded = AppConfig::load().expect("reload");
         assert_eq!(reloaded.general.mode, config.general.mode);
 
-        // Restore env var
-        match original {
-            Some(val) => unsafe { std::env::set_var("XDG_CONFIG_HOME", val) },
-            None => unsafe { std::env::remove_var("XDG_CONFIG_HOME") },
-        }
+        unsafe { std::env::remove_var("XDG_CONFIG_HOME") };
     }
 
     #[test]
     fn load_from_nonexistent_file_fails() {
-        let result = AppConfig::load_from(Path::new("/nonexistent/config.toml"));
+        let dir = tempfile::tempdir().expect("create tempdir");
+        let missing = dir.path().join("missing-config.toml");
+        let result = AppConfig::load_from(&missing);
         assert!(result.is_err());
     }
 
