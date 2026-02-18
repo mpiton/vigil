@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Skip if no Cargo.toml yet (project not initialized)
+if [ ! -f "Cargo.toml" ]; then
+    echo "==> pre-commit: skipped (no Cargo.toml)"
+    exit 0
+fi
+
+echo "==> pre-commit: cargo fmt --check"
+if ! cargo fmt --all --check 2>&1; then
+    echo ""
+    echo "ERROR: Code not formatted. Run 'cargo fmt' and retry."
+    exit 1
+fi
+
+echo "==> pre-commit: cargo clippy"
+if ! cargo clippy --all-targets --all-features -- -D warnings -D clippy::all -D clippy::pedantic -D clippy::nursery 2>&1; then
+    echo ""
+    echo "ERROR: Clippy warnings found. Fix them and retry."
+    exit 1
+fi
+
+echo "==> pre-commit: OK"

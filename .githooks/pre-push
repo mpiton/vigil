@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Skip if no Cargo.toml yet (project not initialized)
+if [ ! -f "Cargo.toml" ]; then
+    echo "==> pre-push: skipped (no Cargo.toml)"
+    exit 0
+fi
+
+echo "==> pre-push: cargo test"
+if ! cargo test --all-features --workspace 2>&1; then
+    echo ""
+    echo "ERROR: Tests failed. Fix them before pushing."
+    exit 1
+fi
+
+echo "==> pre-push: cargo build --release"
+if ! cargo build --release 2>&1; then
+    echo ""
+    echo "ERROR: Release build failed."
+    exit 1
+fi
+
+echo "==> pre-push: OK"

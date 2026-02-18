@@ -1,0 +1,34 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+*.pdb
+
+# Dependencies
+Cargo.lock
+
+# Environment & secrets
+.env
+.env.*
+*.key
+*.pem
+credentials.*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Vigil runtime data
+*.db
+*.log
+vigil.log
+
+# Claude Code outputs
+.claude/
+**/CLAUDE.md
