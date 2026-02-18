@@ -100,11 +100,10 @@ mod tests {
     fn collect_returns_disk_info() {
         let collector = DiskCollector::new();
         let disks = collector.collect().expect("collect should succeed");
-        if disks.is_empty() {
-            // Container or minimal environment with only pseudo-filesystems.
-            return;
+        // May be empty in container environments; validate entries if present.
+        for disk in &disks {
+            assert!(disk.total_gb > 0.0);
         }
-        assert!(disks.iter().all(|d| d.total_gb > 0.0));
     }
 
     #[test]
