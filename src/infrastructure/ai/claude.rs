@@ -140,8 +140,17 @@ fn parse_response(stdout: &[u8]) -> Result<AiDiagnostic, AnalysisError> {
     // We need to find the "result" event and extract the diagnostic.
     let result_text = extract_result(text)?;
 
-    let raw: RawDiagnostic = serde_json::from_str(&result_text)
-        .map_err(|e| AnalysisError::InvalidResponse(format!("failed to parse diagnostic: {e}")))?;
+    tracing::debug!(
+        result_preview = &result_text[..result_text.len().min(500)],
+        "extracted result text"
+    );
+
+    let raw: RawDiagnostic = serde_json::from_str(&result_text).map_err(|e| {
+        AnalysisError::InvalidResponse(format!(
+            "failed to parse diagnostic: {e} — raw: {}",
+            &result_text[..result_text.len().min(200)]
+        ))
+    })?;
 
     Ok(to_diagnostic(raw))
 }
@@ -176,13 +185,29 @@ fn extract_result(text: &str) -> Result<String, AnalysisError> {
 /// If the value is an object, serialize it back to a JSON string.
 fn value_to_string(value: &serde_json::Value) -> Result<String, AnalysisError> {
     match value {
-        serde_json::Value::String(s) => Ok(s.clone()),
+        serde_json::Value::String(s) => Ok(strip_markdown_fences(s)),
         serde_json::Value::Object(_) => serde_json::to_string(value)
             .map_err(|e| AnalysisError::InvalidResponse(format!("failed to serialize: {e}"))),
         _ => Err(AnalysisError::InvalidResponse(format!(
             "unexpected result type: {value}"
         ))),
     }
+}
+
+/// Strip markdown code fences (```json ... ```) from a string.
+/// Claude often wraps JSON responses in code blocks.
+fn strip_markdown_fences(s: &str) -> String {
+    let trimmed = s.trim();
+    trimmed.strip_prefix("```").map_or_else(
+        || s.to_owned(),
+        |rest| {
+            let after_tag = rest.find('\n').map_or(rest, |pos| &rest[pos + 1..]);
+            let content = after_tag
+                .rfind("```")
+                .map_or(after_tag, |pos| &after_tag[..pos]);
+            content.trim().to_owned()
+        },
+    )
 }
 
 fn to_diagnostic(raw: RawDiagnostic) -> AiDiagnostic {
@@ -238,6 +263,24 @@ mod tests {
         // After claiming, the timestamp is immediately set
         assert!(analyzer.try_claim().expect("claim"));
         assert!(analyzer.last_call.lock().expect("lock").is_some());
+    }
+
+    #[test]
+    fn strip_markdown_fences_extracts_json() {
+        let input = "```json\n{\"key\":\"value\"}\n```";
+        assert_eq!(strip_markdown_fences(input), r#"{"key":"value"}"#);
+    }
+
+    #[test]
+    fn strip_markdown_fences_no_fences_passthrough() {
+        let input = r#"{"key":"value"}"#;
+        assert_eq!(strip_markdown_fences(input), input);
+    }
+
+    #[test]
+    fn strip_markdown_fences_no_language_tag() {
+        let input = "```\n{\"key\":\"value\"}\n```";
+        assert_eq!(strip_markdown_fences(input), r#"{"key":"value"}"#);
     }
 
     #[test]
