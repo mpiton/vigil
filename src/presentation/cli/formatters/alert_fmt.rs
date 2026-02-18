@@ -4,9 +4,13 @@ use crate::domain::entities::alert::Alert;
 use crate::domain::value_objects::action_risk::ActionRisk;
 use crate::domain::value_objects::severity::Severity;
 
-/// Strips ANSI/OSC escape sequences from a string to prevent terminal injection.
+/// Strips control characters from a string to prevent terminal injection.
+/// Preserves newlines and tabs for readable output.
 fn sanitize_terminal(input: &str) -> String {
-    input.chars().filter(|c| *c != '\x1b').collect()
+    input
+        .chars()
+        .filter(|c| !c.is_control() || *c == '\n' || *c == '\t')
+        .collect()
 }
 
 fn severity_badge(severity: Severity) -> String {
@@ -31,14 +35,16 @@ fn risk_badge(risk: ActionRisk) -> String {
 pub fn format_alerts(alerts: &[Alert]) {
     for alert in alerts {
         println!();
+        let safe_title = sanitize_terminal(&alert.title);
+        let safe_details = sanitize_terminal(&alert.details);
         println!(
             "{} {} {}",
             severity_badge(alert.severity),
             alert.severity.emoji(),
-            alert.title.bold()
+            safe_title.bold()
         );
-        if !alert.details.is_empty() {
-            println!("  {}", alert.details.dimmed());
+        if !safe_details.is_empty() {
+            println!("  {}", safe_details.dimmed());
         }
         for action in &alert.suggested_actions {
             let safe_cmd = sanitize_terminal(&action.command);
@@ -126,13 +132,18 @@ mod tests {
     }
 
     #[test]
-    fn sanitize_terminal_strips_escape_sequences() {
+    fn sanitize_terminal_strips_control_characters() {
         assert_eq!(sanitize_terminal("normal text"), "normal text");
         assert_eq!(sanitize_terminal("evil\x1b[31mred"), "evil[31mred");
         assert_eq!(
             sanitize_terminal("\x1b]8;;http://evil.com\x1b\\click\x1b]8;;\x1b\\"),
             "]8;;http://evil.com\\click]8;;\\"
         );
+        // Preserves newlines and tabs
+        assert_eq!(sanitize_terminal("line1\nline2\tok"), "line1\nline2\tok");
+        // Strips BEL and other C0/C1 control chars
+        assert_eq!(sanitize_terminal("bell\x07here"), "bellhere");
+        assert_eq!(sanitize_terminal("c1\u{009b}[0m"), "c1[0m");
     }
 
     #[test]
