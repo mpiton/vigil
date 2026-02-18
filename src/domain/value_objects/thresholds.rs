@@ -19,6 +19,8 @@ pub struct ThresholdSet {
     pub disk_warning: f64,
     /// Disk usage percentage that triggers a critical alert
     pub disk_critical: f64,
+    /// CPU load factor: alert when `load_avg_5m` > factor * `core_count`
+    pub cpu_load_factor: f64,
 }
 
 impl Default for ThresholdSet {
@@ -32,6 +34,7 @@ impl Default for ThresholdSet {
             cpu_critical: 95.0,
             disk_warning: 85.0,
             disk_critical: 95.0,
+            cpu_load_factor: 1.5,
         }
     }
 }

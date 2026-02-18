@@ -21,6 +21,20 @@ pub trait Rule: Send + Sync {
     fn evaluate(&self, snapshot: &SystemSnapshot, thresholds: &ThresholdSet) -> Vec<Alert>;
 }
 
+/// Returns all default Level 1 deterministic rules
+#[must_use]
+pub fn default_rules() -> Vec<Box<dyn Rule>> {
+    vec![
+        Box::new(ram::RamWarningRule),
+        Box::new(ram::RamCriticalRule),
+        Box::new(cpu::CpuOverloadRule),
+        Box::new(swap::SwapWarningRule),
+        Box::new(zombie::ZombieProcessRule),
+        Box::new(disk::DiskSpaceRule),
+        Box::new(oom::OomKillerRule),
+    ]
+}
+
 /// Engine that runs a collection of rules against system snapshots
 pub struct RuleEngine {
     rules: Vec<Box<dyn Rule>>,
