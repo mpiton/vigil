@@ -1,7 +1,5 @@
 use std::fmt::Write;
 
-use chrono::Utc;
-
 use crate::domain::entities::alert::{Alert, SuggestedAction};
 use crate::domain::entities::process::ProcessInfo;
 use crate::domain::entities::snapshot::SystemSnapshot;
@@ -30,7 +28,7 @@ impl Rule for RamWarningRule {
             && snapshot.memory.usage_percent < thresholds.ram_critical
         {
             vec![Alert {
-                timestamp: Utc::now(),
+                timestamp: snapshot.timestamp,
                 severity: Severity::High,
                 rule: "ram_warning".to_string(),
                 title: format!(
@@ -86,7 +84,7 @@ impl Rule for RamCriticalRule {
                 .collect();
 
             vec![Alert {
-                timestamp: Utc::now(),
+                timestamp: snapshot.timestamp,
                 severity: Severity::Critical,
                 rule: "ram_critical".to_string(),
                 title: format!(
@@ -110,6 +108,7 @@ mod tests {
     use super::*;
     use crate::domain::entities::process::{ProcessInfo, ProcessState};
     use crate::domain::entities::snapshot::{CpuInfo, MemoryInfo};
+    use chrono::Utc;
 
     fn make_process(pid: u32, name: &str, rss_mb: u64, cpu_percent: f32) -> ProcessInfo {
         ProcessInfo {
