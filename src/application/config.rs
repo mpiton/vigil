@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use crate::domain::value_objects::OperationMode;
 
+/// Top-level application configuration loaded from TOML.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AppConfig {
     #[serde(default)]
@@ -20,6 +21,7 @@ pub struct AppConfig {
     pub database: DatabaseConfig,
 }
 
+/// General settings: operation mode, polling interval, language.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GeneralConfig {
     #[serde(default = "default_mode")]
@@ -30,6 +32,7 @@ pub struct GeneralConfig {
     pub language: String,
 }
 
+/// Alert thresholds for system resource monitoring.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ThresholdConfig {
     #[serde(default = "default_ram_warn")]
@@ -52,6 +55,7 @@ pub struct ThresholdConfig {
     pub temperature_gpu_max: f32,
 }
 
+/// AI analysis provider settings (claude-cli, ollama, or noop).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AiConfig {
     #[serde(default = "default_true")]
@@ -66,6 +70,7 @@ pub struct AiConfig {
     pub ollama_url: Option<String>,
 }
 
+/// Notification channels: desktop, terminal, log file, webhook.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NotificationConfig {
     #[serde(default = "default_true")]
@@ -78,6 +83,7 @@ pub struct NotificationConfig {
     pub webhook_url: Option<String>,
 }
 
+/// Allowlisted commands to ignore or protect from termination.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AllowlistConfig {
     #[serde(default = "default_ignore_commands")]
@@ -86,6 +92,7 @@ pub struct AllowlistConfig {
     pub protected_commands: Vec<String>,
 }
 
+/// Database storage path (tilde-expanded at point of use).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DatabaseConfig {
     #[serde(default = "default_database_path")]
@@ -262,12 +269,21 @@ impl AppConfig {
     /// the file cannot be read, or the TOML content is invalid.
     pub fn load() -> Result<Self> {
         let path = Self::config_path()?;
+        Self::load_or_create(&path)
+    }
 
+    /// Load from a specific path, or create a default config file if missing
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be read, the TOML content is invalid,
+    /// or the default config file cannot be written.
+    pub fn load_or_create(path: &Path) -> Result<Self> {
         if path.exists() {
-            Self::load_from(&path)
+            Self::load_from(path)
         } else {
             let config = Self::default();
-            config.save()?;
+            config.save_to(path)?;
             Ok(config)
         }
     }
@@ -290,11 +306,21 @@ impl AppConfig {
     /// serialization fails, or the file cannot be written.
     pub fn save(&self) -> Result<()> {
         let path = Self::config_path()?;
+        self.save_to(&path)
+    }
+
+    /// Save config to a specific path, creating parent directories if needed
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the directory cannot be created,
+    /// serialization fails, or the file cannot be written.
+    pub fn save_to(&self, path: &Path) -> Result<()> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).context("Failed to create config directory")?;
         }
         let content = toml::to_string_pretty(self).context("Failed to serialize config")?;
-        std::fs::write(&path, content).context("Failed to write config file")?;
+        std::fs::write(path, content).context("Failed to write config file")?;
         Ok(())
     }
 
@@ -417,18 +443,51 @@ provider = "noop"
     }
 
     #[test]
-    fn save_and_reload() {
+    fn save_to_creates_file_and_directories() {
         let dir = tempfile::tempdir().expect("create tempdir");
-        let path = dir.path().join("config.toml");
+        let path = dir.path().join("subdir").join("config.toml");
 
         let config = AppConfig::default();
-        let content = toml::to_string_pretty(&config).expect("serialize");
-        std::fs::write(&path, &content).expect("write");
+        config.save_to(&path).expect("save_to");
 
+        assert!(path.exists());
         let reloaded = AppConfig::load_from(&path).expect("reload");
         assert_eq!(reloaded.general.mode, config.general.mode);
         assert_eq!(reloaded.ai.provider, config.ai.provider);
         assert_eq!(reloaded.database.path, config.database.path);
+    }
+
+    #[test]
+    fn load_or_create_loads_existing_file() {
+        let dir = tempfile::tempdir().expect("create tempdir");
+        let path = dir.path().join("config.toml");
+
+        let toml_str = r#"
+[general]
+mode = "auto"
+interval_secs = 42
+"#;
+        std::fs::write(&path, toml_str).expect("write");
+
+        let config = AppConfig::load_or_create(&path).expect("load_or_create");
+        assert_eq!(config.general.mode, OperationMode::Auto);
+        assert_eq!(config.general.interval_secs, 42);
+    }
+
+    #[test]
+    fn load_or_create_creates_default_when_missing() {
+        let dir = tempfile::tempdir().expect("create tempdir");
+        let path = dir.path().join("vigil").join("config.toml");
+
+        assert!(!path.exists());
+        let config = AppConfig::load_or_create(&path).expect("load_or_create");
+
+        assert!(path.exists());
+        assert_eq!(config.general.mode, OperationMode::Suggest);
+        assert_eq!(config.ai.provider, "claude-cli");
+
+        let reloaded = AppConfig::load_from(&path).expect("reload created file");
+        assert_eq!(reloaded.general.mode, OperationMode::Suggest);
     }
 
     #[test]
