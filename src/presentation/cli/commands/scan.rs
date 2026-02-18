@@ -1,19 +1,24 @@
 use crate::domain::entities::alert::Alert;
+use crate::domain::ports::analyzer::AiAnalyzer;
 use crate::domain::ports::collector::SystemCollector;
+use crate::domain::ports::notifier::Notifier;
 use crate::domain::rules::RuleEngine;
 use crate::domain::value_objects::thresholds::ThresholdSet;
 use crate::presentation::cli::formatters::alert_fmt;
 use crate::presentation::cli::formatters::status_fmt::print_section_header;
 
-/// Runs a one-shot system scan: collect metrics, evaluate rules, display alerts.
+/// Runs a one-shot system scan: collect metrics, evaluate rules, display alerts,
+/// and optionally run AI analysis.
 ///
 /// # Errors
 ///
 /// Returns an error if metrics collection fails or JSON serialization fails.
-pub fn run_scan(
+pub async fn run_scan(
     collector: &dyn SystemCollector,
     rule_engine: &RuleEngine,
     thresholds: &ThresholdSet,
+    analyzer: &dyn AiAnalyzer,
+    notifier: &dyn Notifier,
     json: bool,
 ) -> anyhow::Result<()> {
     let snapshot = collector.collect()?;
@@ -23,6 +28,20 @@ pub fn run_scan(
         print_alerts_json(&alerts)?;
     } else {
         print_alerts_human(&alerts);
+    }
+
+    if !alerts.is_empty() {
+        match analyzer.analyze(&snapshot, &alerts).await {
+            Ok(Some(diagnostic)) => {
+                if let Err(e) = notifier.notify_ai_diagnostic(&diagnostic) {
+                    tracing::warn!("failed to display AI diagnostic: {e}");
+                }
+            }
+            Ok(None) => {}
+            Err(e) => {
+                tracing::warn!("AI analysis failed: {e}");
+            }
+        }
     }
 
     Ok(())
@@ -48,8 +67,12 @@ fn print_alerts_human(alerts: &[Alert]) {
 #[allow(clippy::expect_used)]
 mod tests {
     use super::*;
+    use crate::domain::entities::diagnostic::AiDiagnostic;
     use crate::domain::entities::snapshot::{CpuInfo, MemoryInfo, SystemSnapshot};
+    use crate::domain::ports::analyzer::AnalysisError;
     use crate::domain::ports::collector::CollectionError;
+    use crate::domain::ports::notifier::NotificationError;
+    use async_trait::async_trait;
     use chrono::Utc;
     use colored::control;
 
@@ -72,6 +95,34 @@ mod tests {
     impl SystemCollector for FailingCollector {
         fn collect(&self) -> Result<SystemSnapshot, CollectionError> {
             Err(CollectionError::MetricsUnavailable("test error".into()))
+        }
+    }
+
+    struct MockAnalyzer;
+
+    #[async_trait]
+    impl AiAnalyzer for MockAnalyzer {
+        async fn analyze(
+            &self,
+            _snapshot: &SystemSnapshot,
+            _alerts: &[Alert],
+        ) -> Result<Option<AiDiagnostic>, AnalysisError> {
+            Ok(None)
+        }
+    }
+
+    struct MockNotifier;
+
+    impl Notifier for MockNotifier {
+        fn notify(&self, _alert: &Alert) -> Result<(), NotificationError> {
+            Ok(())
+        }
+
+        fn notify_ai_diagnostic(
+            &self,
+            _diagnostic: &AiDiagnostic,
+        ) -> Result<(), NotificationError> {
+            Ok(())
         }
     }
 
@@ -101,37 +152,59 @@ mod tests {
         }
     }
 
-    #[test]
-    fn scan_healthy_system_no_alerts() {
+    #[tokio::test]
+    async fn scan_healthy_system_no_alerts() {
         disable_colors();
         let collector = MockCollector {
             snapshot: healthy_snapshot(),
         };
         let engine = RuleEngine::new(vec![]);
         let thresholds = ThresholdSet::default();
-        let result = run_scan(&collector, &engine, &thresholds, false);
+        let analyzer = MockAnalyzer;
+        let notifier = MockNotifier;
+        let result = run_scan(
+            &collector,
+            &engine,
+            &thresholds,
+            &analyzer,
+            &notifier,
+            false,
+        )
+        .await;
         assert!(result.is_ok());
     }
 
-    #[test]
-    fn scan_healthy_system_json_output() {
+    #[tokio::test]
+    async fn scan_healthy_system_json_output() {
         disable_colors();
         let collector = MockCollector {
             snapshot: healthy_snapshot(),
         };
         let engine = RuleEngine::new(vec![]);
         let thresholds = ThresholdSet::default();
-        let result = run_scan(&collector, &engine, &thresholds, true);
+        let analyzer = MockAnalyzer;
+        let notifier = MockNotifier;
+        let result = run_scan(&collector, &engine, &thresholds, &analyzer, &notifier, true).await;
         assert!(result.is_ok());
     }
 
-    #[test]
-    fn scan_failing_collector_returns_error() {
+    #[tokio::test]
+    async fn scan_failing_collector_returns_error() {
         disable_colors();
         let collector = FailingCollector;
         let engine = RuleEngine::new(vec![]);
         let thresholds = ThresholdSet::default();
-        let result = run_scan(&collector, &engine, &thresholds, false);
+        let analyzer = MockAnalyzer;
+        let notifier = MockNotifier;
+        let result = run_scan(
+            &collector,
+            &engine,
+            &thresholds,
+            &analyzer,
+            &notifier,
+            false,
+        )
+        .await;
         assert!(result.is_err());
     }
 }

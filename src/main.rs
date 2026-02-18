@@ -75,7 +75,15 @@ async fn main() -> anyhow::Result<()> {
         }
         Some(Commands::Scan { json, .. }) => {
             tokio::time::sleep(Duration::from_millis(500)).await;
-            run_scan(&collector, &rule_engine, &thresholds, json)?;
+            run_scan(
+                &collector,
+                &rule_engine,
+                &thresholds,
+                &*analyzer,
+                &notifier,
+                json,
+            )
+            .await?;
         }
         Some(Commands::Daemon { .. }) => {
             print_banner();
@@ -95,10 +103,6 @@ async fn main() -> anyhow::Result<()> {
             Cli::command().print_help()?;
         }
     }
-
-    // Suppress unused variable warnings — will be wired to daemon/explain commands later
-    let _ = &notifier;
-    let _ = &analyzer;
 
     Ok(())
 }
