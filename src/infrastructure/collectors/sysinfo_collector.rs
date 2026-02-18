@@ -1,19 +1,15 @@
 use std::sync::Mutex;
 
-use sysinfo::{Disks, System};
+use sysinfo::System;
 
+use super::disk_collector::DiskCollector;
 use crate::domain::entities::{
-    disk::DiskInfo,
     process::{ProcessInfo, ProcessState},
     snapshot::{CpuInfo, MemoryInfo, SystemSnapshot},
 };
 use crate::domain::ports::collector::{CollectionError, SystemCollector};
 
 const BYTES_PER_MB: u64 = 1_048_576;
-const BYTES_PER_GB: f64 = 1_073_741_824.0;
-
-/// Filesystem types to exclude from disk metrics.
-const PSEUDO_FILESYSTEMS: &[&str] = &["tmpfs", "devtmpfs", "sysfs", "proc", "cgroup2", "overlay"];
 
 /// Returns `(numerator / denominator) * 100.0`, or `0.0` when `denominator` is zero.
 #[allow(clippy::cast_precision_loss)]
@@ -42,6 +38,7 @@ fn avg_cpu_usage(per_core: &[f32]) -> f32 {
 /// trait requires `&self` but `sysinfo::System` needs `&mut self` for refresh.
 pub struct SysinfoCollector {
     sys: Mutex<System>,
+    disk_collector: DiskCollector,
 }
 
 impl SysinfoCollector {
@@ -52,6 +49,7 @@ impl SysinfoCollector {
         sys.refresh_all();
         Self {
             sys: Mutex::new(sys),
+            disk_collector: DiskCollector::new(),
         }
     }
 }
@@ -74,8 +72,7 @@ impl SystemCollector for SysinfoCollector {
         let processes = collect_processes(&sys);
         drop(sys);
 
-        let disks_data = Disks::new_with_refreshed_list();
-        let disks = collect_disks(&disks_data);
+        let disks = self.disk_collector.collect()?;
 
         Ok(SystemSnapshot {
             timestamp: chrono::Utc::now(),
@@ -166,32 +163,6 @@ fn collect_processes(sys: &System) -> Vec<ProcessInfo> {
         .collect()
 }
 
-#[allow(clippy::cast_precision_loss)]
-fn collect_disks(disks: &Disks) -> Vec<DiskInfo> {
-    disks
-        .iter()
-        .filter(|d| {
-            let fs = d.file_system().to_string_lossy();
-            !PSEUDO_FILESYSTEMS.iter().any(|&pseudo| fs == pseudo) && d.total_space() > 0
-        })
-        .map(|disk| {
-            // total > 0 guaranteed by the filter above
-            let total = disk.total_space();
-            let available = disk.available_space();
-            let used = total.saturating_sub(available);
-            let usage_percent = (used as f64 / total as f64) * 100.0;
-
-            DiskInfo {
-                mount_point: disk.mount_point().to_string_lossy().to_string(),
-                total_gb: total as f64 / BYTES_PER_GB,
-                available_gb: available as f64 / BYTES_PER_GB,
-                usage_percent,
-                filesystem: disk.file_system().to_string_lossy().to_string(),
-            }
-        })
-        .collect()
-}
-
 const fn map_process_status(status: sysinfo::ProcessStatus) -> ProcessState {
     match status {
         sysinfo::ProcessStatus::Run => ProcessState::Running,
@@ -268,20 +239,6 @@ mod tests {
 
         let me = me.expect("verified above");
         assert!(!me.name.is_empty(), "process name should not be empty");
-    }
-
-    #[test]
-    fn disks_exclude_pseudo_filesystems() {
-        let collector = SysinfoCollector::new();
-        let snapshot = collector.collect().expect("collect should succeed");
-
-        for disk in &snapshot.disks {
-            assert!(
-                !PSEUDO_FILESYSTEMS.contains(&disk.filesystem.as_str()),
-                "pseudo-filesystem {fs} should be filtered",
-                fs = disk.filesystem
-            );
-        }
     }
 
     #[test]
@@ -428,16 +385,12 @@ mod tests {
     }
 
     #[test]
-    fn disks_have_positive_total_space() {
+    fn snapshot_includes_disks() {
         let collector = SysinfoCollector::new();
         let snapshot = collector.collect().expect("collect should succeed");
-
+        // May be empty in container environments; validate entries if present.
         for disk in &snapshot.disks {
-            assert!(
-                disk.total_gb > 0.0,
-                "disk {mp} should have positive total space",
-                mp = disk.mount_point
-            );
+            assert!(disk.total_gb > 0.0, "real disk should have positive size");
         }
     }
 }
