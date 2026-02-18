@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 /// Operating mode that determines how vigil handles detected issues
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "lowercase")]
 pub enum OperationMode {
     /// Only observe and log — no actions taken
     #[default]
