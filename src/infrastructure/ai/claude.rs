@@ -108,7 +108,10 @@ impl AiAnalyzer for ClaudeCliAnalyzer {
 }
 
 #[derive(Deserialize)]
-struct ClaudeCliResponse {
+struct ClaudeCliEvent {
+    #[serde(rename = "type")]
+    event_type: String,
+    #[serde(default)]
     result: serde_json::Value,
 }
 
@@ -130,25 +133,56 @@ fn parse_response(stdout: &[u8]) -> Result<AiDiagnostic, AnalysisError> {
     let text = std::str::from_utf8(stdout)
         .map_err(|e| AnalysisError::InvalidResponse(format!("invalid UTF-8: {e}")))?;
 
-    // The Claude CLI --output-format json wraps output in {"result": ...}.
-    // The result field may be a string (containing JSON) or an object directly.
-    let diagnostic_value = match serde_json::from_str::<ClaudeCliResponse>(text) {
-        Ok(envelope) => match envelope.result {
-            serde_json::Value::String(s) => s,
-            other => {
-                let raw: RawDiagnostic = serde_json::from_value(other).map_err(|e| {
-                    AnalysisError::InvalidResponse(format!("failed to parse diagnostic: {e}"))
-                })?;
-                return Ok(to_diagnostic(raw));
-            }
-        },
-        Err(_) => text.to_owned(),
-    };
+    tracing::debug!(response_len = text.len(), "raw claude CLI response");
 
-    let raw: RawDiagnostic = serde_json::from_str(&diagnostic_value)
+    // The Claude CLI --output-format json returns a JSON array of events:
+    // [{"type":"system",...}, ..., {"type":"result","result":"..."}]
+    // We need to find the "result" event and extract the diagnostic.
+    let result_text = extract_result(text)?;
+
+    let raw: RawDiagnostic = serde_json::from_str(&result_text)
         .map_err(|e| AnalysisError::InvalidResponse(format!("failed to parse diagnostic: {e}")))?;
 
     Ok(to_diagnostic(raw))
+}
+
+/// Extract the `result` field from the Claude CLI JSON output.
+/// Handles both array format `[..., {"type":"result","result":"..."}]`
+/// and single-object format `{"type":"result","result":"..."}`.
+fn extract_result(text: &str) -> Result<String, AnalysisError> {
+    // Try as array of events first (standard --output-format json)
+    if let Ok(events) = serde_json::from_str::<Vec<ClaudeCliEvent>>(text) {
+        if let Some(result_event) = events.iter().rfind(|e| e.event_type == "result") {
+            return value_to_string(&result_event.result);
+        }
+        return Err(AnalysisError::InvalidResponse(
+            "no result event in claude response".into(),
+        ));
+    }
+
+    // Try as single object with result field
+    if let Ok(event) = serde_json::from_str::<ClaudeCliEvent>(text) {
+        if event.event_type == "result" {
+            return value_to_string(&event.result);
+        }
+    }
+
+    // Fallback: treat as raw diagnostic JSON
+    Ok(text.to_owned())
+}
+
+/// Convert a `serde_json::Value` to a string suitable for diagnostic parsing.
+/// If the value is a string, return it (it may contain embedded JSON).
+/// If the value is an object, serialize it back to a JSON string.
+fn value_to_string(value: &serde_json::Value) -> Result<String, AnalysisError> {
+    match value {
+        serde_json::Value::String(s) => Ok(s.clone()),
+        serde_json::Value::Object(_) => serde_json::to_string(value)
+            .map_err(|e| AnalysisError::InvalidResponse(format!("failed to serialize: {e}"))),
+        _ => Err(AnalysisError::InvalidResponse(format!(
+            "unexpected result type: {value}"
+        ))),
+    }
 }
 
 fn to_diagnostic(raw: RawDiagnostic) -> AiDiagnostic {
@@ -217,7 +251,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_claude_cli_envelope() {
+    fn parse_claude_cli_single_event_string_result() {
         let inner = r#"{"summary":"OK","details":"All good","severity":"Low","confidence":0.5}"#;
         let envelope = format!(
             r#"{{"type":"result","subtype":"success","result":"{escaped}","session_id":"abc"}}"#,
@@ -229,12 +263,28 @@ mod tests {
     }
 
     #[test]
-    fn parse_claude_cli_envelope_object_result() {
+    fn parse_claude_cli_single_event_object_result() {
         let envelope = r#"{"type":"result","subtype":"success","result":{"summary":"OK","details":"All good","severity":"Low","confidence":0.5},"session_id":"abc"}"#;
         let diag = parse_response(envelope.as_bytes()).expect("should parse object result");
         assert_eq!(diag.summary, "OK");
         assert_eq!(diag.details, "All good");
         assert_eq!(diag.severity, Severity::Low);
+    }
+
+    #[test]
+    fn parse_claude_cli_event_array() {
+        let array = r#"[{"type":"system","subtype":"init","cwd":"/tmp","session_id":"abc","tools":[]},{"type":"result","subtype":"success","result":"{\"summary\":\"Disk full\",\"details\":\"AppImage mount full\",\"severity\":\"Critical\",\"confidence\":0.95}","session_id":"abc"}]"#;
+        let diag = parse_response(array.as_bytes()).expect("should parse event array");
+        assert_eq!(diag.summary, "Disk full");
+        assert_eq!(diag.severity, Severity::Critical);
+    }
+
+    #[test]
+    fn parse_claude_cli_event_array_object_result() {
+        let array = r#"[{"type":"system","subtype":"init","cwd":"/tmp","session_id":"abc","tools":[]},{"type":"result","subtype":"success","result":{"summary":"Disk full","details":"AppImage mount full","severity":"Critical","confidence":0.95},"session_id":"abc"}]"#;
+        let diag = parse_response(array.as_bytes()).expect("should parse array with object result");
+        assert_eq!(diag.summary, "Disk full");
+        assert_eq!(diag.severity, Severity::Critical);
     }
 
     #[test]
