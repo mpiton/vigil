@@ -209,6 +209,32 @@ impl AlertStore for SqliteStore {
         drop(conn);
         Ok(alerts)
     }
+
+    fn get_alerts_since(&self, since: DateTime<Utc>) -> Result<Vec<Alert>, StoreError> {
+        let since_str = since.to_rfc3339();
+
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| StoreError::ReadFailed("lock poisoned".into()))?;
+
+        let mut stmt = conn
+            .prepare(
+                "SELECT created_at, severity, rule, title, details, actions \
+                 FROM alerts WHERE created_at >= ?1 ORDER BY id DESC",
+            )
+            .map_err(|e| StoreError::ReadFailed(e.to_string()))?;
+
+        let alerts = stmt
+            .query_map(params![since_str], parse_alert_row)
+            .map_err(|e| StoreError::ReadFailed(e.to_string()))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| StoreError::ReadFailed(e.to_string()))?;
+
+        drop(stmt);
+        drop(conn);
+        Ok(alerts)
+    }
 }
 
 impl SnapshotStore for SqliteStore {
@@ -254,6 +280,35 @@ impl SnapshotStore for SqliteStore {
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(e) => Err(StoreError::ReadFailed(e.to_string())),
         }
+    }
+
+    fn get_snapshots_since(&self, since: DateTime<Utc>) -> Result<Vec<SystemSnapshot>, StoreError> {
+        let since_str = since.to_rfc3339();
+
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| StoreError::ReadFailed("lock poisoned".into()))?;
+
+        let mut stmt = conn
+            .prepare("SELECT data FROM snapshots WHERE captured_at >= ?1 ORDER BY id DESC")
+            .map_err(|e| StoreError::ReadFailed(e.to_string()))?;
+
+        let snapshots = stmt
+            .query_map(params![since_str], |row| row.get::<_, String>(0))
+            .map_err(|e| StoreError::ReadFailed(e.to_string()))?
+            .map(|r| {
+                r.map_err(|e| StoreError::ReadFailed(e.to_string()))
+                    .and_then(|data| {
+                        serde_json::from_str(&data)
+                            .map_err(|e| StoreError::ReadFailed(e.to_string()))
+                    })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        drop(stmt);
+        drop(conn);
+        Ok(snapshots)
     }
 }
 
@@ -458,6 +513,76 @@ mod tests {
         };
         let result = store.log_action(&record);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn get_alerts_since_filters_by_timestamp() {
+        let (store, _dir) = make_store();
+        let old_alert = Alert {
+            timestamp: DateTime::parse_from_rfc3339("2020-01-01T00:00:00Z")
+                .expect("parse")
+                .with_timezone(&Utc),
+            severity: Severity::Low,
+            rule: "old".into(),
+            title: "Old".into(),
+            details: "Old".into(),
+            suggested_actions: vec![],
+        };
+        let new_alert = make_alert(Severity::High);
+        assert!(store.save_alert(&old_alert).is_ok());
+        assert!(store.save_alert(&new_alert).is_ok());
+
+        let cutoff = DateTime::parse_from_rfc3339("2024-01-01T00:00:00Z")
+            .expect("parse")
+            .with_timezone(&Utc);
+        let recent = store.get_alerts_since(cutoff).expect("get_alerts_since");
+        assert_eq!(recent.len(), 1);
+        assert_eq!(recent[0].severity, Severity::High);
+    }
+
+    #[test]
+    fn get_alerts_since_returns_empty_when_none_match() {
+        let (store, _dir) = make_store();
+        let old_alert = Alert {
+            timestamp: DateTime::parse_from_rfc3339("2020-01-01T00:00:00Z")
+                .expect("parse")
+                .with_timezone(&Utc),
+            severity: Severity::Low,
+            rule: "old".into(),
+            title: "Old".into(),
+            details: "Old".into(),
+            suggested_actions: vec![],
+        };
+        assert!(store.save_alert(&old_alert).is_ok());
+
+        let recent = store
+            .get_alerts_since(Utc::now())
+            .expect("get_alerts_since");
+        assert!(recent.is_empty());
+    }
+
+    #[test]
+    fn get_snapshots_since_filters_by_timestamp() {
+        let (store, _dir) = make_store();
+        let snapshot = make_snapshot();
+        assert!(store.save_snapshot(&snapshot).is_ok());
+
+        let cutoff = DateTime::parse_from_rfc3339("2020-01-01T00:00:00Z")
+            .expect("parse")
+            .with_timezone(&Utc);
+        let recent = store
+            .get_snapshots_since(cutoff)
+            .expect("get_snapshots_since");
+        assert_eq!(recent.len(), 1);
+    }
+
+    #[test]
+    fn get_snapshots_since_returns_empty_when_none_match() {
+        let (store, _dir) = make_store();
+        let recent = store
+            .get_snapshots_since(Utc::now())
+            .expect("get_snapshots_since");
+        assert!(recent.is_empty());
     }
 
     #[test]

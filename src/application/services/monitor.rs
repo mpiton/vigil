@@ -178,7 +178,7 @@ mod tests {
     use crate::domain::value_objects::action_risk::ActionRisk;
     use crate::domain::value_objects::severity::Severity;
     use async_trait::async_trait;
-    use chrono::Utc;
+    use chrono::{DateTime, Utc};
     use std::sync::Mutex;
 
     struct MockCollector;
@@ -246,6 +246,10 @@ mod tests {
             let alerts = self.alerts.lock().expect("mutex poisoned");
             Ok(alerts.iter().rev().take(count).cloned().collect())
         }
+
+        fn get_alerts_since(&self, _since: DateTime<Utc>) -> Result<Vec<Alert>, StoreError> {
+            Ok(self.alerts.lock().expect("mutex poisoned").clone())
+        }
     }
 
     struct MockSnapshotStore {
@@ -276,6 +280,13 @@ mod tests {
                 .expect("mutex poisoned")
                 .last()
                 .cloned())
+        }
+
+        fn get_snapshots_since(
+            &self,
+            _since: DateTime<Utc>,
+        ) -> Result<Vec<SystemSnapshot>, StoreError> {
+            Ok(self.snapshots.lock().expect("mutex poisoned").clone())
         }
     }
 
@@ -439,6 +450,13 @@ mod tests {
         fn get_latest_snapshot(&self) -> Result<Option<SystemSnapshot>, StoreError> {
             Ok(None)
         }
+
+        fn get_snapshots_since(
+            &self,
+            _since: DateTime<Utc>,
+        ) -> Result<Vec<SystemSnapshot>, StoreError> {
+            Err(StoreError::WriteFailed("disk full".into()))
+        }
     }
 
     struct FailingAlertStore;
@@ -454,6 +472,10 @@ mod tests {
 
         fn get_recent_alerts(&self, _count: usize) -> Result<Vec<Alert>, StoreError> {
             Ok(vec![])
+        }
+
+        fn get_alerts_since(&self, _since: DateTime<Utc>) -> Result<Vec<Alert>, StoreError> {
+            Err(StoreError::WriteFailed("disk full".into()))
         }
     }
 

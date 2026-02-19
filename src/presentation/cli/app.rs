@@ -53,6 +53,18 @@ pub enum Commands {
         json: bool,
     },
 
+    /// Générer un rapport des dernières heures
+    #[command(alias = "r")]
+    Report {
+        /// Fenêtre temporelle en heures (défaut : 24)
+        #[arg(long, default_value = "24")]
+        hours: u64,
+
+        /// Sortie au format JSON
+        #[arg(long)]
+        json: bool,
+    },
+
     /// Explain a process behavior
     #[command(alias = "e")]
     Explain {
@@ -199,5 +211,49 @@ mod tests {
     fn parse_scan_alias() {
         let cli = Cli::try_parse_from(["vigil", "sc"]).unwrap_or_else(|e| panic!("{e}"));
         assert!(matches!(cli.command, Some(Commands::Scan { .. })));
+    }
+
+    #[test]
+    fn parse_report_command() {
+        let cli = Cli::try_parse_from(["vigil", "report"]).unwrap_or_else(|e| panic!("{e}"));
+        assert!(matches!(
+            cli.command,
+            Some(Commands::Report {
+                hours: 24,
+                json: false
+            })
+        ));
+    }
+
+    #[test]
+    fn parse_report_with_hours() {
+        let cli = Cli::try_parse_from(["vigil", "report", "--hours", "48"])
+            .unwrap_or_else(|e| panic!("{e}"));
+        assert!(matches!(
+            cli.command,
+            Some(Commands::Report {
+                hours: 48,
+                json: false
+            })
+        ));
+    }
+
+    #[test]
+    fn parse_report_with_json() {
+        let cli =
+            Cli::try_parse_from(["vigil", "report", "--json"]).unwrap_or_else(|e| panic!("{e}"));
+        assert!(matches!(
+            cli.command,
+            Some(Commands::Report {
+                hours: 24,
+                json: true
+            })
+        ));
+    }
+
+    #[test]
+    fn parse_report_alias() {
+        let cli = Cli::try_parse_from(["vigil", "r"]).unwrap_or_else(|e| panic!("{e}"));
+        assert!(matches!(cli.command, Some(Commands::Report { .. })));
     }
 }

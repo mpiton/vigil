@@ -1,5 +1,7 @@
 use std::sync::Mutex;
 
+use chrono::{DateTime, Utc};
+
 use crate::domain::entities::alert::Alert;
 use crate::domain::entities::snapshot::SystemSnapshot;
 use crate::domain::ports::store::{
@@ -59,6 +61,19 @@ impl AlertStore for InMemoryStore {
         alerts.truncate(count);
         Ok(alerts)
     }
+
+    fn get_alerts_since(&self, since: DateTime<Utc>) -> Result<Vec<Alert>, StoreError> {
+        let mut alerts: Vec<Alert> = self
+            .alerts
+            .lock()
+            .map_err(|_| StoreError::ReadFailed("lock poisoned".into()))?
+            .iter()
+            .filter(|a| a.timestamp >= since)
+            .cloned()
+            .collect();
+        alerts.reverse();
+        Ok(alerts)
+    }
 }
 
 impl ActionLogStore for InMemoryStore {
@@ -88,12 +103,24 @@ impl SnapshotStore for InMemoryStore {
             .last()
             .cloned())
     }
+
+    fn get_snapshots_since(&self, since: DateTime<Utc>) -> Result<Vec<SystemSnapshot>, StoreError> {
+        let snapshots: Vec<SystemSnapshot> = self
+            .snapshots
+            .lock()
+            .map_err(|_| StoreError::ReadFailed("lock poisoned".into()))?
+            .iter()
+            .filter(|s| s.timestamp >= since)
+            .cloned()
+            .collect();
+        Ok(snapshots)
+    }
 }
 
 #[cfg(test)]
 #[allow(clippy::expect_used)]
 mod tests {
-    use chrono::Utc;
+    use chrono::{DateTime, Utc};
 
     use super::*;
     use crate::domain::entities::snapshot::{CpuInfo, MemoryInfo};
@@ -213,6 +240,43 @@ mod tests {
         };
         let result = store.log_action(&record);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn get_alerts_since_filters_by_timestamp() {
+        let store = InMemoryStore::new();
+        let old_alert = Alert {
+            timestamp: DateTime::parse_from_rfc3339("2020-01-01T00:00:00Z")
+                .expect("parse")
+                .with_timezone(&Utc),
+            severity: Severity::Low,
+            rule: "old".into(),
+            title: "Old".into(),
+            details: "Old".into(),
+            suggested_actions: vec![],
+        };
+        store.save_alert(&old_alert).expect("save");
+        store.save_alert(&make_alert(Severity::High)).expect("save");
+
+        let cutoff = DateTime::parse_from_rfc3339("2024-01-01T00:00:00Z")
+            .expect("parse")
+            .with_timezone(&Utc);
+        let recent = store.get_alerts_since(cutoff).expect("get_alerts_since");
+        assert_eq!(recent.len(), 1);
+    }
+
+    #[test]
+    fn get_snapshots_since_filters_by_timestamp() {
+        let store = InMemoryStore::new();
+        store.save_snapshot(&make_snapshot()).expect("save");
+
+        let cutoff = DateTime::parse_from_rfc3339("2020-01-01T00:00:00Z")
+            .expect("parse")
+            .with_timezone(&Utc);
+        let recent = store
+            .get_snapshots_since(cutoff)
+            .expect("get_snapshots_since");
+        assert_eq!(recent.len(), 1);
     }
 
     #[test]

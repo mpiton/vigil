@@ -15,6 +15,7 @@ use vigil::infrastructure::notifications::terminal::TerminalNotifier;
 use vigil::infrastructure::persistence::sqlite_store::SqliteStore;
 use vigil::presentation::cli::app::{Cli, Commands};
 use vigil::presentation::cli::commands::daemon::run_daemon;
+use vigil::presentation::cli::commands::report::run_report;
 use vigil::presentation::cli::commands::scan::run_scan;
 use vigil::presentation::cli::commands::status::run_status;
 
@@ -116,6 +117,13 @@ async fn main() -> anyhow::Result<()> {
                 effective_mode,
             );
             run_daemon(&service, config.general.interval_secs).await?;
+        }
+        Some(Commands::Report { hours, json }) => {
+            let store = SqliteStore::new(&config.database.path)?;
+            if let Err(e) = store.cleanup_old(config.database.retention_hours) {
+                tracing::warn!("Échec nettoyage anciennes données : {e}");
+            }
+            run_report(&store, &store, hours, json)?;
         }
         Some(Commands::Explain { .. }) => {
             eprintln!("Commande explain pas encore implémentée");
