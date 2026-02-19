@@ -73,16 +73,14 @@ async fn main() -> anyhow::Result<()> {
     // AI analyzer — select implementation based on config
     let analyzer = create_ai_analyzer(&config.ai);
 
-    // Persistence — SQLite store with automatic cleanup
-    let store = SqliteStore::new(&config.database.path)?;
-    store.cleanup_old(config.database.retention_hours)?;
-
     match cli.command {
         Some(Commands::Status { json }) => {
             tokio::time::sleep(Duration::from_millis(500)).await;
             run_status(&collector, json)?;
         }
         Some(Commands::Scan { ai, json }) => {
+            let store = SqliteStore::new(&config.database.path)?;
+            store.cleanup_old(config.database.retention_hours)?;
             tokio::time::sleep(Duration::from_millis(500)).await;
             run_scan(
                 &collector,
@@ -98,6 +96,8 @@ async fn main() -> anyhow::Result<()> {
             .await?;
         }
         Some(Commands::Daemon { .. }) => {
+            let store = SqliteStore::new(&config.database.path)?;
+            store.cleanup_old(config.database.retention_hours)?;
             print_banner();
             let service = MonitorService::new(
                 &collector,
