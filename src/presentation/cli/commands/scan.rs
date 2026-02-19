@@ -6,6 +6,7 @@ use crate::domain::entities::snapshot::SystemSnapshot;
 use crate::domain::ports::analyzer::AiAnalyzer;
 use crate::domain::ports::collector::SystemCollector;
 use crate::domain::ports::notifier::Notifier;
+use crate::domain::ports::store::{AlertStore, SnapshotStore};
 use crate::domain::rules::RuleEngine;
 use crate::domain::value_objects::thresholds::ThresholdSet;
 use crate::presentation::cli::formatters::alert_fmt;
@@ -25,17 +26,28 @@ struct ScanOutput<'a> {
 /// # Errors
 ///
 /// Returns an error if metrics collection fails or JSON serialization fails.
+#[allow(clippy::too_many_arguments)]
 pub async fn run_scan(
     collector: &dyn SystemCollector,
     rule_engine: &RuleEngine,
     thresholds: &ThresholdSet,
     analyzer: &dyn AiAnalyzer,
     notifier: &dyn Notifier,
+    alert_store: &dyn AlertStore,
+    snapshot_store: &dyn SnapshotStore,
     ai: bool,
     json: bool,
 ) -> anyhow::Result<()> {
     let snapshot = collector.collect()?;
+    if let Err(e) = snapshot_store.save_snapshot(&snapshot) {
+        tracing::warn!("Échec sauvegarde snapshot : {e}");
+    }
     let alerts = rule_engine.analyze(&snapshot, thresholds);
+    for alert in &alerts {
+        if let Err(e) = alert_store.save_alert(alert) {
+            tracing::warn!("Échec sauvegarde alerte : {e}");
+        }
+    }
 
     let diagnostic = if ai && !alerts.is_empty() {
         match analyzer.analyze(&snapshot, &alerts).await {
@@ -102,6 +114,7 @@ mod tests {
     use crate::domain::ports::analyzer::AnalysisError;
     use crate::domain::ports::collector::CollectionError;
     use crate::domain::ports::notifier::NotificationError;
+    use crate::domain::ports::store::{AlertStore, SnapshotStore, StoreError};
     use crate::domain::value_objects::action_risk::ActionRisk;
     use crate::domain::value_objects::severity::Severity;
     use async_trait::async_trait;
@@ -201,6 +214,29 @@ mod tests {
         }
     }
 
+    struct MockStore;
+
+    impl AlertStore for MockStore {
+        fn save_alert(&self, _alert: &Alert) -> Result<(), StoreError> {
+            Ok(())
+        }
+        fn get_alerts(&self) -> Result<Vec<Alert>, StoreError> {
+            Ok(vec![])
+        }
+        fn get_recent_alerts(&self, _count: usize) -> Result<Vec<Alert>, StoreError> {
+            Ok(vec![])
+        }
+    }
+
+    impl SnapshotStore for MockStore {
+        fn save_snapshot(&self, _snapshot: &SystemSnapshot) -> Result<(), StoreError> {
+            Ok(())
+        }
+        fn get_latest_snapshot(&self) -> Result<Option<SystemSnapshot>, StoreError> {
+            Ok(None)
+        }
+    }
+
     fn healthy_snapshot() -> SystemSnapshot {
         SystemSnapshot {
             timestamp: Utc::now(),
@@ -281,6 +317,8 @@ mod tests {
             &thresholds,
             &analyzer,
             &notifier,
+            &MockStore,
+            &MockStore,
             false,
             false,
         )
@@ -304,6 +342,8 @@ mod tests {
             &thresholds,
             &analyzer,
             &notifier,
+            &MockStore,
+            &MockStore,
             false,
             true,
         )
@@ -325,6 +365,8 @@ mod tests {
             &thresholds,
             &analyzer,
             &notifier,
+            &MockStore,
+            &MockStore,
             false,
             false,
         )
@@ -348,6 +390,8 @@ mod tests {
             &thresholds,
             &analyzer,
             &notifier,
+            &MockStore,
+            &MockStore,
             false,
             false,
         )
@@ -373,6 +417,8 @@ mod tests {
             &thresholds,
             &analyzer,
             &notifier,
+            &MockStore,
+            &MockStore,
             true,
             false,
         )
@@ -398,6 +444,8 @@ mod tests {
             &thresholds,
             &analyzer,
             &notifier,
+            &MockStore,
+            &MockStore,
             true,
             false,
         )
@@ -423,6 +471,8 @@ mod tests {
             &thresholds,
             &analyzer,
             &notifier,
+            &MockStore,
+            &MockStore,
             false,
             true,
         )
@@ -446,6 +496,8 @@ mod tests {
             &thresholds,
             &analyzer,
             &notifier,
+            &MockStore,
+            &MockStore,
             true,
             true,
         )

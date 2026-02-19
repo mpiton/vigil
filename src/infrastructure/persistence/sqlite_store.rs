@@ -6,7 +6,9 @@ use rusqlite::{params, Connection};
 
 use crate::domain::entities::alert::{Alert, SuggestedAction};
 use crate::domain::entities::snapshot::SystemSnapshot;
-use crate::domain::ports::store::{AlertStore, SnapshotStore, StoreError};
+use crate::domain::ports::store::{
+    ActionLogStore, ActionRecord, AlertStore, SnapshotStore, StoreError,
+};
 use crate::domain::value_objects::severity::Severity;
 
 use super::migrations;
@@ -255,11 +257,37 @@ impl SnapshotStore for SqliteStore {
     }
 }
 
+impl ActionLogStore for SqliteStore {
+    fn log_action(&self, record: &ActionRecord) -> Result<(), StoreError> {
+        let risk_str = serde_json::to_string(&record.risk)
+            .map_err(|e| StoreError::WriteFailed(e.to_string()))?;
+        let risk_str = risk_str.trim_matches('"');
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| StoreError::WriteFailed("lock poisoned".into()))?;
+        conn.execute(
+            "INSERT INTO actions_log (logged_at, alert_id, command, result, risk) VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![
+                record.timestamp.to_rfc3339(),
+                record.alert_id,
+                record.command,
+                record.result,
+                risk_str,
+            ],
+        )
+        .map_err(|e| StoreError::WriteFailed(e.to_string()))?;
+        drop(conn);
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::expect_used)]
 mod tests {
     use super::*;
     use crate::domain::entities::snapshot::{CpuInfo, MemoryInfo};
+    use crate::domain::ports::store::{ActionLogStore, ActionRecord};
     use crate::domain::value_objects::action_risk::ActionRisk;
 
     fn make_alert(severity: Severity) -> Alert {
@@ -416,6 +444,20 @@ mod tests {
         assert_eq!(alerts[0].suggested_actions.len(), 2);
         assert_eq!(alerts[0].suggested_actions[0].risk, ActionRisk::Dangerous);
         assert_eq!(alerts[0].suggested_actions[1].risk, ActionRisk::Moderate);
+    }
+
+    #[test]
+    fn log_action_inserts_record() {
+        let (store, _dir) = make_store();
+        let record = ActionRecord {
+            timestamp: Utc::now(),
+            alert_id: None,
+            command: "kill -15 1234".to_string(),
+            result: Some("process terminated".to_string()),
+            risk: ActionRisk::Moderate,
+        };
+        let result = store.log_action(&record);
+        assert!(result.is_ok());
     }
 
     #[test]

@@ -5,12 +5,15 @@ use colored::Colorize;
 use tracing_subscriber::EnvFilter;
 
 use vigil::application::config::AppConfig;
+use vigil::application::services::monitor::MonitorService;
 use vigil::domain::rules::{default_rules, RuleEngine};
 use vigil::domain::value_objects::thresholds::ThresholdSet;
 use vigil::infrastructure::ai::create_ai_analyzer;
 use vigil::infrastructure::collectors::sysinfo_collector::SysinfoCollector;
 use vigil::infrastructure::notifications::terminal::TerminalNotifier;
+use vigil::infrastructure::persistence::sqlite_store::SqliteStore;
 use vigil::presentation::cli::app::{Cli, Commands};
+use vigil::presentation::cli::commands::daemon::run_daemon;
 use vigil::presentation::cli::commands::scan::run_scan;
 use vigil::presentation::cli::commands::status::run_status;
 
@@ -52,6 +55,10 @@ async fn main() -> anyhow::Result<()> {
     // AI analyzer — select implementation based on config
     let analyzer = create_ai_analyzer(&config.ai);
 
+    // Persistence — SQLite store with automatic cleanup
+    let store = SqliteStore::new(&config.database.path)?;
+    store.cleanup_old(config.database.retention_hours)?;
+
     match cli.command {
         Some(Commands::Status { json }) => {
             tokio::time::sleep(Duration::from_millis(500)).await;
@@ -65,6 +72,8 @@ async fn main() -> anyhow::Result<()> {
                 &thresholds,
                 &*analyzer,
                 &notifier,
+                &store,
+                &store,
                 ai,
                 json,
             )
@@ -72,7 +81,17 @@ async fn main() -> anyhow::Result<()> {
         }
         Some(Commands::Daemon { .. }) => {
             print_banner();
-            eprintln!("Commande daemon pas encore implémentée");
+            let service = MonitorService::new(
+                &collector,
+                &rule_engine,
+                &thresholds,
+                &*analyzer,
+                &notifier,
+                &store,
+                &store,
+                config.ai.enabled,
+            );
+            run_daemon(&service, config.general.interval_secs).await?;
         }
         Some(Commands::Explain { .. }) => {
             eprintln!("Commande explain pas encore implémentée");

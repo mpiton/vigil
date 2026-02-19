@@ -100,6 +100,8 @@ pub struct AllowlistConfig {
 pub struct DatabaseConfig {
     #[serde(default = "default_database_path")]
     pub path: String,
+    #[serde(default = "default_retention_hours")]
+    pub retention_hours: u64,
 }
 
 // --- Defaults ---
@@ -197,6 +199,10 @@ fn default_database_path() -> String {
     "~/.local/share/vigil/vigil.db".into()
 }
 
+const fn default_retention_hours() -> u64 {
+    168
+}
+
 // --- Default impls ---
 
 impl Default for GeneralConfig {
@@ -262,6 +268,7 @@ impl Default for DatabaseConfig {
     fn default() -> Self {
         Self {
             path: default_database_path(),
+            retention_hours: default_retention_hours(),
         }
     }
 }
@@ -400,6 +407,7 @@ mod tests {
         assert_eq!(config.allowlist.ignore_commands.len(), 4);
         assert_eq!(config.allowlist.protected_commands.len(), 4);
         assert_eq!(config.database.path, "~/.local/share/vigil/vigil.db");
+        assert_eq!(config.database.retention_hours, 168);
     }
 
     #[test]
@@ -418,6 +426,10 @@ mod tests {
         assert_eq!(deserialized.ai.model, config.ai.model);
         assert_eq!(deserialized.ai.cooldown_secs, config.ai.cooldown_secs);
         assert_eq!(deserialized.database.path, config.database.path);
+        assert_eq!(
+            deserialized.database.retention_hours,
+            config.database.retention_hours
+        );
     }
 
     #[test]
