@@ -80,7 +80,9 @@ async fn main() -> anyhow::Result<()> {
         }
         Some(Commands::Scan { ai, json }) => {
             let store = SqliteStore::new(&config.database.path)?;
-            store.cleanup_old(config.database.retention_hours)?;
+            if let Err(e) = store.cleanup_old(config.database.retention_hours) {
+                tracing::warn!("Échec nettoyage anciennes données : {e}");
+            }
             tokio::time::sleep(Duration::from_millis(500)).await;
             run_scan(
                 &collector,
@@ -97,7 +99,9 @@ async fn main() -> anyhow::Result<()> {
         }
         Some(Commands::Daemon { .. }) => {
             let store = SqliteStore::new(&config.database.path)?;
-            store.cleanup_old(config.database.retention_hours)?;
+            if let Err(e) = store.cleanup_old(config.database.retention_hours) {
+                tracing::warn!("Échec nettoyage anciennes données : {e}");
+            }
             print_banner();
             let service = MonitorService::new(
                 &collector,
