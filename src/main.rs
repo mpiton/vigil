@@ -7,6 +7,8 @@ use tracing_subscriber::EnvFilter;
 use vigil::application::config::AppConfig;
 use vigil::domain::rules::{default_rules, RuleEngine};
 use vigil::domain::value_objects::thresholds::ThresholdSet;
+use vigil::infrastructure::ai::claude::ClaudeCliAnalyzer;
+use vigil::infrastructure::ai::noop::NoopAnalyzer;
 use vigil::infrastructure::collectors::sysinfo_collector::SysinfoCollector;
 use vigil::infrastructure::notifications::terminal::TerminalNotifier;
 use vigil::presentation::cli::app::{Cli, Commands};
@@ -48,6 +50,24 @@ async fn main() -> anyhow::Result<()> {
     let rule_engine = RuleEngine::new(rules);
     let thresholds = ThresholdSet::from(&config.thresholds);
 
+    // AI analyzer — select implementation based on config
+    let analyzer: Box<dyn vigil::domain::ports::AiAnalyzer> =
+        if config.ai.enabled && config.ai.provider == "claude-cli" {
+            Box::new(ClaudeCliAnalyzer::new(
+                config.ai.model.clone(),
+                config.ai.cooldown_secs,
+                config.ai.timeout_secs,
+            ))
+        } else {
+            if config.ai.enabled && config.ai.provider != "noop" {
+                tracing::warn!(
+                    provider = %config.ai.provider,
+                    "unknown AI provider, falling back to noop"
+                );
+            }
+            Box::new(NoopAnalyzer::new())
+        };
+
     match cli.command {
         Some(Commands::Status { json }) => {
             tokio::time::sleep(Duration::from_millis(500)).await;
@@ -55,7 +75,15 @@ async fn main() -> anyhow::Result<()> {
         }
         Some(Commands::Scan { json, .. }) => {
             tokio::time::sleep(Duration::from_millis(500)).await;
-            run_scan(&collector, &rule_engine, &thresholds, json)?;
+            run_scan(
+                &collector,
+                &rule_engine,
+                &thresholds,
+                &*analyzer,
+                &notifier,
+                json,
+            )
+            .await?;
         }
         Some(Commands::Daemon { .. }) => {
             print_banner();
@@ -75,9 +103,6 @@ async fn main() -> anyhow::Result<()> {
             Cli::command().print_help()?;
         }
     }
-
-    // Suppress unused variable warning — notifier will be wired to daemon command later
-    let _ = &notifier;
 
     Ok(())
 }
