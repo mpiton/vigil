@@ -7,8 +7,7 @@ use tracing_subscriber::EnvFilter;
 use vigil::application::config::AppConfig;
 use vigil::domain::rules::{default_rules, RuleEngine};
 use vigil::domain::value_objects::thresholds::ThresholdSet;
-use vigil::infrastructure::ai::claude::ClaudeCliAnalyzer;
-use vigil::infrastructure::ai::noop::NoopAnalyzer;
+use vigil::infrastructure::ai::create_ai_analyzer;
 use vigil::infrastructure::collectors::sysinfo_collector::SysinfoCollector;
 use vigil::infrastructure::notifications::terminal::TerminalNotifier;
 use vigil::presentation::cli::app::{Cli, Commands};
@@ -51,22 +50,7 @@ async fn main() -> anyhow::Result<()> {
     let thresholds = ThresholdSet::from(&config.thresholds);
 
     // AI analyzer — select implementation based on config
-    let analyzer: Box<dyn vigil::domain::ports::AiAnalyzer> =
-        if config.ai.enabled && config.ai.provider == "claude-cli" {
-            Box::new(ClaudeCliAnalyzer::new(
-                config.ai.model.clone(),
-                config.ai.cooldown_secs,
-                config.ai.timeout_secs,
-            ))
-        } else {
-            if config.ai.enabled && config.ai.provider != "noop" {
-                tracing::warn!(
-                    provider = %config.ai.provider,
-                    "unknown AI provider, falling back to noop"
-                );
-            }
-            Box::new(NoopAnalyzer::new())
-        };
+    let analyzer = create_ai_analyzer(&config.ai);
 
     match cli.command {
         Some(Commands::Status { json }) => {
