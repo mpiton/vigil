@@ -33,6 +33,7 @@ pub fn default_rules() -> Vec<Box<dyn Rule>> {
         Box::new(disk::DiskSpaceRule),
         Box::new(oom::OomKillerRule),
         Box::new(duplicates::DuplicateProcessRule),
+        Box::new(orphans::OrphanDevProcessRule),
     ]
 }
 
@@ -188,7 +189,7 @@ mod tests {
     #[test]
     fn default_rules_returns_all_level1_rules() {
         let rules = default_rules();
-        assert_eq!(rules.len(), 8);
+        assert_eq!(rules.len(), 9);
         let names: Vec<&str> = rules.iter().map(|r| r.name()).collect();
         assert!(names.contains(&"ram_warning"));
         assert!(names.contains(&"ram_critical"));
@@ -198,6 +199,7 @@ mod tests {
         assert!(names.contains(&"disk_space_low"));
         assert!(names.contains(&"oom_killer"));
         assert!(names.contains(&"duplicate_processes"));
+        assert!(names.contains(&"orphan_dev_processes"));
     }
 
     #[test]
