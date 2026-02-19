@@ -7,6 +7,7 @@ use tracing_subscriber::EnvFilter;
 use vigil::application::config::AppConfig;
 use vigil::application::services::monitor::MonitorService;
 use vigil::domain::rules::{default_rules, RuleEngine};
+use vigil::domain::value_objects::operation_mode::OperationMode;
 use vigil::domain::value_objects::thresholds::ThresholdSet;
 use vigil::infrastructure::ai::create_ai_analyzer;
 use vigil::infrastructure::collectors::sysinfo_collector::SysinfoCollector;
@@ -47,7 +48,24 @@ async fn main() -> anyhow::Result<()> {
 
     // Manual DI — main.rs is the only place that knows concrete types
     let collector = SysinfoCollector::new();
-    let notifier = TerminalNotifier::new(config.general.mode);
+
+    // Resolve effective mode: CLI --mode override takes precedence for daemon
+    let effective_mode = if let Some(Commands::Daemon {
+        mode: Some(ref m), ..
+    }) = cli.command
+    {
+        match m.to_lowercase().as_str() {
+            "observe" => OperationMode::Observe,
+            "suggest" => OperationMode::Suggest,
+            "auto" => OperationMode::Auto,
+            other => {
+                anyhow::bail!("Mode inconnu : '{other}'. Modes valides : observe, suggest, auto");
+            }
+        }
+    } else {
+        config.general.mode
+    };
+    let notifier = TerminalNotifier::new(effective_mode);
     let rules = default_rules();
     let rule_engine = RuleEngine::new(rules);
     let thresholds = ThresholdSet::from(&config.thresholds);

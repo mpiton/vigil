@@ -214,6 +214,42 @@ mod tests {
         }
     }
 
+    struct FailingStore;
+
+    impl AlertStore for FailingStore {
+        fn save_alert(&self, _alert: &Alert) -> Result<(), StoreError> {
+            Err(StoreError::WriteFailed("disk full".into()))
+        }
+        fn get_alerts(&self) -> Result<Vec<Alert>, StoreError> {
+            Ok(vec![])
+        }
+        fn get_recent_alerts(&self, _count: usize) -> Result<Vec<Alert>, StoreError> {
+            Ok(vec![])
+        }
+    }
+
+    impl SnapshotStore for FailingStore {
+        fn save_snapshot(&self, _snapshot: &SystemSnapshot) -> Result<(), StoreError> {
+            Err(StoreError::WriteFailed("disk full".into()))
+        }
+        fn get_latest_snapshot(&self) -> Result<Option<SystemSnapshot>, StoreError> {
+            Ok(None)
+        }
+    }
+
+    struct FailingAnalyzer;
+
+    #[async_trait]
+    impl AiAnalyzer for FailingAnalyzer {
+        async fn analyze(
+            &self,
+            _snapshot: &SystemSnapshot,
+            _alerts: &[Alert],
+        ) -> Result<Option<AiDiagnostic>, AnalysisError> {
+            Err(AnalysisError::ServiceUnavailable("API down".into()))
+        }
+    }
+
     struct MockStore;
 
     impl AlertStore for MockStore {
@@ -503,5 +539,57 @@ mod tests {
         )
         .await;
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn scan_store_failure_continues_gracefully() {
+        disable_colors();
+        let collector = MockCollector {
+            snapshot: healthy_snapshot(),
+        };
+        let engine = RuleEngine::new(vec![Box::new(AlwaysAlertRule)]);
+        let thresholds = ThresholdSet::default();
+        let analyzer = MockAnalyzer;
+        let notifier = MockNotifier;
+        let result = run_scan(
+            &collector,
+            &engine,
+            &thresholds,
+            &analyzer,
+            &notifier,
+            &FailingStore,
+            &FailingStore,
+            false,
+            false,
+        )
+        .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn scan_ai_analyzer_failure_continues() {
+        disable_colors();
+        let collector = MockCollector {
+            snapshot: healthy_snapshot(),
+        };
+        let engine = RuleEngine::new(vec![Box::new(AlwaysAlertRule)]);
+        let thresholds = ThresholdSet::default();
+        let analyzer = FailingAnalyzer;
+        let notifier = CountingNotifier::new();
+        let result = run_scan(
+            &collector,
+            &engine,
+            &thresholds,
+            &analyzer,
+            &notifier,
+            &MockStore,
+            &MockStore,
+            true,
+            false,
+        )
+        .await;
+        assert!(result.is_ok());
+        assert_eq!(notifier.notify_count.load(Ordering::Relaxed), 1);
+        assert_eq!(notifier.diagnostic_count.load(Ordering::Relaxed), 0);
     }
 }

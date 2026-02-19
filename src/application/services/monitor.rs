@@ -353,4 +353,274 @@ mod tests {
         let cycle = result.expect("run_once failed");
         assert_eq!(cycle.alerts_count, 0);
     }
+
+    struct FailingCollector;
+
+    impl SystemCollector for FailingCollector {
+        fn collect(&self) -> Result<SystemSnapshot, CollectionError> {
+            Err(CollectionError::MetricsUnavailable("test failure".into()))
+        }
+    }
+
+    struct FailingSnapshotStore;
+
+    impl SnapshotStore for FailingSnapshotStore {
+        fn save_snapshot(&self, _snapshot: &SystemSnapshot) -> Result<(), StoreError> {
+            Err(StoreError::WriteFailed("disk full".into()))
+        }
+
+        fn get_latest_snapshot(&self) -> Result<Option<SystemSnapshot>, StoreError> {
+            Ok(None)
+        }
+    }
+
+    struct FailingAlertStore;
+
+    impl AlertStore for FailingAlertStore {
+        fn save_alert(&self, _alert: &Alert) -> Result<(), StoreError> {
+            Err(StoreError::WriteFailed("disk full".into()))
+        }
+
+        fn get_alerts(&self) -> Result<Vec<Alert>, StoreError> {
+            Ok(vec![])
+        }
+
+        fn get_recent_alerts(&self, _count: usize) -> Result<Vec<Alert>, StoreError> {
+            Ok(vec![])
+        }
+    }
+
+    struct FailingNotifier;
+
+    impl Notifier for FailingNotifier {
+        fn notify(&self, _alert: &Alert) -> Result<(), NotificationError> {
+            Err(NotificationError::SendFailed("dbus down".into()))
+        }
+
+        fn notify_ai_diagnostic(
+            &self,
+            _diagnostic: &AiDiagnostic,
+        ) -> Result<(), NotificationError> {
+            Err(NotificationError::SendFailed("dbus down".into()))
+        }
+    }
+
+    struct DiagnosticAnalyzer;
+
+    #[async_trait]
+    impl AiAnalyzer for DiagnosticAnalyzer {
+        async fn analyze(
+            &self,
+            _snapshot: &SystemSnapshot,
+            _alerts: &[Alert],
+        ) -> Result<Option<AiDiagnostic>, AnalysisError> {
+            Ok(Some(AiDiagnostic {
+                timestamp: Utc::now(),
+                summary: "Test diagnostic".to_string(),
+                details: "Test details".to_string(),
+                severity: Severity::High,
+                confidence: 0.9,
+            }))
+        }
+    }
+
+    struct FailingAnalyzer;
+
+    #[async_trait]
+    impl AiAnalyzer for FailingAnalyzer {
+        async fn analyze(
+            &self,
+            _snapshot: &SystemSnapshot,
+            _alerts: &[Alert],
+        ) -> Result<Option<AiDiagnostic>, AnalysisError> {
+            Err(AnalysisError::ServiceUnavailable("API down".into()))
+        }
+    }
+
+    #[tokio::test]
+    async fn run_once_collection_failure_propagates() {
+        let collector = FailingCollector;
+        let rule_engine = RuleEngine::new(vec![]);
+        let thresholds = ThresholdSet::default();
+        let analyzer = MockAnalyzer;
+        let notifier = MockNotifier;
+        let alert_store = MockAlertStore::new();
+        let snapshot_store = MockSnapshotStore::new();
+
+        let service = MonitorService::new(
+            &collector,
+            &rule_engine,
+            &thresholds,
+            &analyzer,
+            &notifier,
+            &alert_store,
+            &snapshot_store,
+            false,
+        );
+
+        let result = service.run_once().await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn run_once_snapshot_save_failure_continues() {
+        let collector = MockCollector;
+        let rule_engine = RuleEngine::new(vec![]);
+        let thresholds = ThresholdSet::default();
+        let analyzer = MockAnalyzer;
+        let notifier = MockNotifier;
+        let alert_store = MockAlertStore::new();
+        let snapshot_store = FailingSnapshotStore;
+
+        let service = MonitorService::new(
+            &collector,
+            &rule_engine,
+            &thresholds,
+            &analyzer,
+            &notifier,
+            &alert_store,
+            &snapshot_store,
+            false,
+        );
+
+        let result = service.run_once().await;
+        assert!(result.is_ok());
+        let cycle = result.expect("run_once failed");
+        assert!(!cycle.snapshot_saved);
+    }
+
+    #[tokio::test]
+    async fn run_once_alert_save_failure_continues() {
+        let collector = MockCollector;
+        let rule_engine = RuleEngine::new(vec![Box::new(AlwaysAlertRule)]);
+        let thresholds = ThresholdSet::default();
+        let analyzer = MockAnalyzer;
+        let notifier = MockNotifier;
+        let alert_store = FailingAlertStore;
+        let snapshot_store = MockSnapshotStore::new();
+
+        let service = MonitorService::new(
+            &collector,
+            &rule_engine,
+            &thresholds,
+            &analyzer,
+            &notifier,
+            &alert_store,
+            &snapshot_store,
+            false,
+        );
+
+        let result = service.run_once().await;
+        assert!(result.is_ok());
+        let cycle = result.expect("run_once failed");
+        assert_eq!(cycle.alerts_count, 1);
+    }
+
+    #[tokio::test]
+    async fn run_once_notification_failure_continues() {
+        let collector = MockCollector;
+        let rule_engine = RuleEngine::new(vec![Box::new(AlwaysAlertRule)]);
+        let thresholds = ThresholdSet::default();
+        let analyzer = MockAnalyzer;
+        let notifier = FailingNotifier;
+        let alert_store = MockAlertStore::new();
+        let snapshot_store = MockSnapshotStore::new();
+
+        let service = MonitorService::new(
+            &collector,
+            &rule_engine,
+            &thresholds,
+            &analyzer,
+            &notifier,
+            &alert_store,
+            &snapshot_store,
+            false,
+        );
+
+        let result = service.run_once().await;
+        assert!(result.is_ok());
+        let cycle = result.expect("run_once failed");
+        assert_eq!(cycle.alerts_count, 1);
+    }
+
+    #[tokio::test]
+    async fn run_once_ai_returns_diagnostic() {
+        let collector = MockCollector;
+        let rule_engine = RuleEngine::new(vec![Box::new(AlwaysAlertRule)]);
+        let thresholds = ThresholdSet::default();
+        let analyzer = DiagnosticAnalyzer;
+        let notifier = MockNotifier;
+        let alert_store = MockAlertStore::new();
+        let snapshot_store = MockSnapshotStore::new();
+
+        let service = MonitorService::new(
+            &collector,
+            &rule_engine,
+            &thresholds,
+            &analyzer,
+            &notifier,
+            &alert_store,
+            &snapshot_store,
+            true,
+        );
+
+        let result = service.run_once().await;
+        assert!(result.is_ok());
+        let cycle = result.expect("run_once failed");
+        assert_eq!(cycle.alerts_count, 1);
+        assert!(cycle.snapshot_saved);
+    }
+
+    #[tokio::test]
+    async fn run_once_ai_failure_continues() {
+        let collector = MockCollector;
+        let rule_engine = RuleEngine::new(vec![Box::new(AlwaysAlertRule)]);
+        let thresholds = ThresholdSet::default();
+        let analyzer = FailingAnalyzer;
+        let notifier = MockNotifier;
+        let alert_store = MockAlertStore::new();
+        let snapshot_store = MockSnapshotStore::new();
+
+        let service = MonitorService::new(
+            &collector,
+            &rule_engine,
+            &thresholds,
+            &analyzer,
+            &notifier,
+            &alert_store,
+            &snapshot_store,
+            true,
+        );
+
+        let result = service.run_once().await;
+        assert!(result.is_ok());
+        let cycle = result.expect("run_once failed");
+        assert_eq!(cycle.alerts_count, 1);
+        assert!(cycle.snapshot_saved);
+    }
+
+    #[tokio::test]
+    async fn run_once_ai_diagnostic_notification_failure_continues() {
+        let collector = MockCollector;
+        let rule_engine = RuleEngine::new(vec![Box::new(AlwaysAlertRule)]);
+        let thresholds = ThresholdSet::default();
+        let analyzer = DiagnosticAnalyzer;
+        let notifier = FailingNotifier;
+        let alert_store = MockAlertStore::new();
+        let snapshot_store = MockSnapshotStore::new();
+
+        let service = MonitorService::new(
+            &collector,
+            &rule_engine,
+            &thresholds,
+            &analyzer,
+            &notifier,
+            &alert_store,
+            &snapshot_store,
+            true,
+        );
+
+        let result = service.run_once().await;
+        assert!(result.is_ok());
+    }
 }

@@ -4,9 +4,13 @@ use crate::application::services::monitor::MonitorService;
 
 /// Run the monitoring daemon loop at the configured interval.
 ///
+/// This function runs indefinitely until the process is terminated.
+/// Errors during individual monitoring cycles are logged but do not stop the daemon.
+///
 /// # Errors
 ///
-/// Returns an error if the initial monitoring cycle fails catastrophically.
+/// In practice this function never returns; the `Result` return type exists
+/// only for compatibility with the `#[tokio::main]` entry point.
 pub async fn run_daemon(service: &MonitorService<'_>, interval_secs: u64) -> anyhow::Result<()> {
     println!("Démarrage du daemon vigil (intervalle : {interval_secs}s)...");
     let mut interval = tokio::time::interval(Duration::from_secs(interval_secs));
