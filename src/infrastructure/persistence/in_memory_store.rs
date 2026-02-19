@@ -2,12 +2,15 @@ use std::sync::Mutex;
 
 use crate::domain::entities::alert::Alert;
 use crate::domain::entities::snapshot::SystemSnapshot;
-use crate::domain::ports::store::{AlertStore, SnapshotStore, StoreError};
+use crate::domain::ports::store::{
+    ActionLogStore, ActionRecord, AlertStore, SnapshotStore, StoreError,
+};
 
 /// In-memory store for testing purposes.
 pub struct InMemoryStore {
     alerts: Mutex<Vec<Alert>>,
     snapshots: Mutex<Vec<SystemSnapshot>>,
+    action_logs: Mutex<Vec<ActionRecord>>,
 }
 
 impl InMemoryStore {
@@ -16,6 +19,7 @@ impl InMemoryStore {
         Self {
             alerts: Mutex::new(Vec::new()),
             snapshots: Mutex::new(Vec::new()),
+            action_logs: Mutex::new(Vec::new()),
         }
     }
 }
@@ -57,6 +61,16 @@ impl AlertStore for InMemoryStore {
     }
 }
 
+impl ActionLogStore for InMemoryStore {
+    fn log_action(&self, record: &ActionRecord) -> Result<(), StoreError> {
+        self.action_logs
+            .lock()
+            .map_err(|_| StoreError::WriteFailed("lock poisoned".into()))?
+            .push(record.clone());
+        Ok(())
+    }
+}
+
 impl SnapshotStore for InMemoryStore {
     fn save_snapshot(&self, snapshot: &SystemSnapshot) -> Result<(), StoreError> {
         self.snapshots
@@ -83,6 +97,8 @@ mod tests {
 
     use super::*;
     use crate::domain::entities::snapshot::{CpuInfo, MemoryInfo};
+    use crate::domain::ports::store::{ActionLogStore, ActionRecord};
+    use crate::domain::value_objects::action_risk::ActionRisk;
     use crate::domain::value_objects::severity::Severity;
 
     fn make_alert(severity: Severity) -> Alert {
@@ -183,6 +199,20 @@ mod tests {
         let store = InMemoryStore::new();
         let result = store.get_latest_snapshot().expect("get_latest_snapshot");
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn log_action_stores_record() {
+        let store = InMemoryStore::new();
+        let record = ActionRecord {
+            timestamp: Utc::now(),
+            alert_id: None,
+            command: "kill -9 5678".to_string(),
+            result: None,
+            risk: ActionRisk::Dangerous,
+        };
+        let result = store.log_action(&record);
+        assert!(result.is_ok());
     }
 
     #[test]

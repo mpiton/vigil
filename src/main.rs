@@ -5,12 +5,16 @@ use colored::Colorize;
 use tracing_subscriber::EnvFilter;
 
 use vigil::application::config::AppConfig;
+use vigil::application::services::monitor::MonitorService;
 use vigil::domain::rules::{default_rules, RuleEngine};
+use vigil::domain::value_objects::operation_mode::OperationMode;
 use vigil::domain::value_objects::thresholds::ThresholdSet;
 use vigil::infrastructure::ai::create_ai_analyzer;
 use vigil::infrastructure::collectors::sysinfo_collector::SysinfoCollector;
 use vigil::infrastructure::notifications::terminal::TerminalNotifier;
+use vigil::infrastructure::persistence::sqlite_store::SqliteStore;
 use vigil::presentation::cli::app::{Cli, Commands};
+use vigil::presentation::cli::commands::daemon::run_daemon;
 use vigil::presentation::cli::commands::scan::run_scan;
 use vigil::presentation::cli::commands::status::run_status;
 
@@ -44,7 +48,24 @@ async fn main() -> anyhow::Result<()> {
 
     // Manual DI — main.rs is the only place that knows concrete types
     let collector = SysinfoCollector::new();
-    let notifier = TerminalNotifier::new(config.general.mode);
+
+    // Resolve effective mode: CLI --mode override takes precedence for daemon
+    let effective_mode = if let Some(Commands::Daemon {
+        mode: Some(ref m), ..
+    }) = cli.command
+    {
+        match m.to_lowercase().as_str() {
+            "observe" => OperationMode::Observe,
+            "suggest" => OperationMode::Suggest,
+            "auto" => OperationMode::Auto,
+            other => {
+                anyhow::bail!("Mode inconnu : '{other}'. Modes valides : observe, suggest, auto");
+            }
+        }
+    } else {
+        config.general.mode
+    };
+    let notifier = TerminalNotifier::new(effective_mode);
     let rules = default_rules();
     let rule_engine = RuleEngine::new(rules);
     let thresholds = ThresholdSet::from(&config.thresholds);
@@ -58,6 +79,10 @@ async fn main() -> anyhow::Result<()> {
             run_status(&collector, json)?;
         }
         Some(Commands::Scan { ai, json }) => {
+            let store = SqliteStore::new(&config.database.path)?;
+            if let Err(e) = store.cleanup_old(config.database.retention_hours) {
+                tracing::warn!("Échec nettoyage anciennes données : {e}");
+            }
             tokio::time::sleep(Duration::from_millis(500)).await;
             run_scan(
                 &collector,
@@ -65,14 +90,30 @@ async fn main() -> anyhow::Result<()> {
                 &thresholds,
                 &*analyzer,
                 &notifier,
+                &store,
+                &store,
                 ai,
                 json,
             )
             .await?;
         }
         Some(Commands::Daemon { .. }) => {
+            let store = SqliteStore::new(&config.database.path)?;
+            if let Err(e) = store.cleanup_old(config.database.retention_hours) {
+                tracing::warn!("Échec nettoyage anciennes données : {e}");
+            }
             print_banner();
-            eprintln!("Commande daemon pas encore implémentée");
+            let service = MonitorService::new(
+                &collector,
+                &rule_engine,
+                &thresholds,
+                &*analyzer,
+                &notifier,
+                &store,
+                &store,
+                config.ai.enabled,
+            );
+            run_daemon(&service, config.general.interval_secs).await?;
         }
         Some(Commands::Explain { .. }) => {
             eprintln!("Commande explain pas encore implémentée");
