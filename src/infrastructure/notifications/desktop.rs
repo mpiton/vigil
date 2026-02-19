@@ -28,7 +28,7 @@ impl Notifier for DesktopNotifier {
         let urgency = severity_to_urgency(alert.severity);
 
         let raw_summary = format!("{} Vigil \u{2014} {}", alert.severity.emoji(), alert.title);
-        let summary = truncate(&escape_markup(&raw_summary), MAX_SUMMARY_CHARS);
+        let summary = escape_markup(&truncate(&raw_summary, MAX_SUMMARY_CHARS));
 
         let raw_body = if alert.suggested_actions.is_empty() {
             alert.details.clone()
@@ -43,7 +43,7 @@ impl Notifier for DesktopNotifier {
             )
         };
 
-        let body = truncate(&escape_markup(&raw_body), MAX_BODY_CHARS);
+        let body = escape_markup(&truncate(&raw_body, MAX_BODY_CHARS));
 
         send_notification(&summary, &body, urgency)
     }
@@ -52,8 +52,8 @@ impl Notifier for DesktopNotifier {
         let urgency = severity_to_urgency(diagnostic.severity);
 
         let raw_summary = format!("\u{1f916} Vigil \u{2014} {}", diagnostic.summary);
-        let summary = truncate(&escape_markup(&raw_summary), MAX_SUMMARY_CHARS);
-        let body = truncate(&escape_markup(&diagnostic.details), MAX_BODY_CHARS);
+        let summary = escape_markup(&truncate(&raw_summary, MAX_SUMMARY_CHARS));
+        let body = escape_markup(&truncate(&diagnostic.details, MAX_BODY_CHARS));
 
         send_notification(&summary, &body, urgency)
     }
@@ -87,6 +87,9 @@ const fn severity_to_urgency(severity: Severity) -> Urgency {
 
 // Truncates on Unicode scalar values (not grapheme clusters; ZWJ sequences may split).
 fn truncate(s: &str, max_chars: usize) -> String {
+    if max_chars == 0 {
+        return String::new();
+    }
     if s.chars().count() <= max_chars {
         s.to_owned()
     } else {
@@ -216,7 +219,7 @@ mod tests {
     }
 
     #[test]
-    fn escape_markup_strips_html() {
+    fn escape_markup_escapes_html_chars() {
         let input = "<b>bold</b> & <script>";
         let result = escape_markup(input);
         assert_eq!(result, "&lt;b&gt;bold&lt;/b&gt; &amp; &lt;script&gt;");
