@@ -3,12 +3,16 @@ use crate::domain::ports::collector::SystemCollector;
 use crate::domain::ports::notifier::Notifier;
 use crate::domain::ports::store::{AlertStore, SnapshotStore};
 use crate::domain::rules::RuleEngine;
+use crate::domain::value_objects::action_risk::ActionRisk;
+use crate::domain::value_objects::operation_mode::OperationMode;
+use crate::domain::value_objects::severity::Severity;
 use crate::domain::value_objects::thresholds::ThresholdSet;
 
 /// Result of a single monitoring cycle.
 pub struct MonitorCycleResult {
     pub alerts_count: usize,
     pub snapshot_saved: bool,
+    pub auto_actions_run: usize,
 }
 
 /// Orchestrates a monitoring cycle: collect → persist → analyze → notify.
@@ -21,6 +25,7 @@ pub struct MonitorService<'a> {
     alert_store: &'a dyn AlertStore,
     snapshot_store: &'a dyn SnapshotStore,
     ai_enabled: bool,
+    operation_mode: OperationMode,
 }
 
 impl<'a> MonitorService<'a> {
@@ -35,6 +40,7 @@ impl<'a> MonitorService<'a> {
         alert_store: &'a dyn AlertStore,
         snapshot_store: &'a dyn SnapshotStore,
         ai_enabled: bool,
+        operation_mode: OperationMode,
     ) -> Self {
         Self {
             collector,
@@ -45,6 +51,7 @@ impl<'a> MonitorService<'a> {
             alert_store,
             snapshot_store,
             ai_enabled,
+            operation_mode,
         }
     }
 
@@ -66,6 +73,14 @@ impl<'a> MonitorService<'a> {
 
         let alerts = self.rule_engine.analyze(&snapshot, self.thresholds);
 
+        if alerts.is_empty() {
+            tracing::debug!("Système OK — aucune alerte");
+        }
+
+        if !alerts.is_empty() {
+            tracing::warn!("{} alerte(s) détectée(s)", alerts.len());
+        }
+
         for alert in &alerts {
             if let Err(e) = self.alert_store.save_alert(alert) {
                 tracing::warn!("Échec sauvegarde alerte : {e}");
@@ -78,7 +93,38 @@ impl<'a> MonitorService<'a> {
             }
         }
 
-        if self.ai_enabled && !alerts.is_empty() {
+        let mut auto_actions_run = 0usize;
+
+        if self.operation_mode == OperationMode::Auto {
+            for alert in &alerts {
+                for action in &alert.suggested_actions {
+                    if action.risk == ActionRisk::Safe {
+                        tracing::info!("Auto-exécution : {}", action.description);
+                        match tokio::process::Command::new("sh")
+                            .arg("-c")
+                            .arg(&action.command)
+                            .output()
+                            .await
+                        {
+                            Ok(output) => {
+                                if output.status.success() {
+                                    tracing::info!("Commande réussie : {}", action.command);
+                                    auto_actions_run += 1;
+                                } else {
+                                    tracing::warn!("Commande échouée : {}", action.command);
+                                }
+                            }
+                            Err(e) => {
+                                tracing::warn!("Échec exécution '{}' : {e}", action.command);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let has_serious = alerts.iter().any(|a| a.severity >= Severity::High);
+        if self.ai_enabled && has_serious {
             match self.analyzer.analyze(&snapshot, &alerts).await {
                 Ok(Some(diag)) => {
                     if let Err(e) = self.notifier.notify_ai_diagnostic(&diag) {
@@ -95,6 +141,7 @@ impl<'a> MonitorService<'a> {
         Ok(MonitorCycleResult {
             alerts_count: alerts.len(),
             snapshot_saved,
+            auto_actions_run,
         })
     }
 }
@@ -283,6 +330,7 @@ mod tests {
             &alert_store,
             &snapshot_store,
             false,
+            OperationMode::Observe,
         );
 
         let result = service.run_once().await;
@@ -318,6 +366,7 @@ mod tests {
             &alert_store,
             &snapshot_store,
             false,
+            OperationMode::Observe,
         );
 
         let result = service.run_once().await;
@@ -346,6 +395,7 @@ mod tests {
             &alert_store,
             &snapshot_store,
             true,
+            OperationMode::Observe,
         );
 
         let result = service.run_once().await;
@@ -456,6 +506,7 @@ mod tests {
             &alert_store,
             &snapshot_store,
             false,
+            OperationMode::Observe,
         );
 
         let result = service.run_once().await;
@@ -481,6 +532,7 @@ mod tests {
             &alert_store,
             &snapshot_store,
             false,
+            OperationMode::Observe,
         );
 
         let result = service.run_once().await;
@@ -508,6 +560,7 @@ mod tests {
             &alert_store,
             &snapshot_store,
             false,
+            OperationMode::Observe,
         );
 
         let result = service.run_once().await;
@@ -535,6 +588,7 @@ mod tests {
             &alert_store,
             &snapshot_store,
             false,
+            OperationMode::Observe,
         );
 
         let result = service.run_once().await;
@@ -562,6 +616,7 @@ mod tests {
             &alert_store,
             &snapshot_store,
             true,
+            OperationMode::Observe,
         );
 
         let result = service.run_once().await;
@@ -590,6 +645,7 @@ mod tests {
             &alert_store,
             &snapshot_store,
             true,
+            OperationMode::Observe,
         );
 
         let result = service.run_once().await;
@@ -618,6 +674,7 @@ mod tests {
             &alert_store,
             &snapshot_store,
             true, // AI enabled
+            OperationMode::Observe,
         );
 
         let result = service.run_once().await;
@@ -645,9 +702,197 @@ mod tests {
             &alert_store,
             &snapshot_store,
             true,
+            OperationMode::Observe,
         );
 
         let result = service.run_once().await;
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn run_once_auto_mode_executes_safe_actions() {
+        let collector = MockCollector;
+        let rule_engine = RuleEngine::new(vec![Box::new(AlwaysAlertRule)]);
+        let thresholds = ThresholdSet::default();
+        let analyzer = MockAnalyzer;
+        let notifier = MockNotifier;
+        let alert_store = MockAlertStore::new();
+        let snapshot_store = MockSnapshotStore::new();
+
+        let service = MonitorService::new(
+            &collector,
+            &rule_engine,
+            &thresholds,
+            &analyzer,
+            &notifier,
+            &alert_store,
+            &snapshot_store,
+            false,
+            OperationMode::Auto,
+        );
+
+        let result = service.run_once().await;
+        assert!(result.is_ok());
+        let cycle = result.expect("run_once failed");
+        assert_eq!(cycle.alerts_count, 1);
+        assert_eq!(cycle.auto_actions_run, 1);
+    }
+
+    struct MediumAlertRule;
+
+    impl Rule for MediumAlertRule {
+        fn name(&self) -> &'static str {
+            "medium_alert"
+        }
+
+        fn evaluate(&self, _snapshot: &SystemSnapshot, _thresholds: &ThresholdSet) -> Vec<Alert> {
+            vec![Alert {
+                timestamp: Utc::now(),
+                severity: Severity::Medium,
+                rule: "medium_alert".to_string(),
+                title: "Medium Alert".to_string(),
+                details: "Test details".to_string(),
+                suggested_actions: vec![SuggestedAction {
+                    description: "Fix it".to_string(),
+                    command: "echo fix".to_string(),
+                    risk: ActionRisk::Safe,
+                }],
+            }]
+        }
+    }
+
+    /// Track if AI analyze was called.
+    struct TrackingAnalyzer {
+        called: Mutex<bool>,
+    }
+
+    impl TrackingAnalyzer {
+        fn new() -> Self {
+            Self {
+                called: Mutex::new(false),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl AiAnalyzer for TrackingAnalyzer {
+        async fn analyze(
+            &self,
+            _snapshot: &SystemSnapshot,
+            _alerts: &[Alert],
+        ) -> Result<Option<AiDiagnostic>, AnalysisError> {
+            *self.called.lock().expect("mutex poisoned") = true;
+            Ok(None)
+        }
+    }
+
+    #[tokio::test]
+    async fn run_once_ai_skipped_for_medium_severity() {
+        let collector = MockCollector;
+        let rule_engine = RuleEngine::new(vec![Box::new(MediumAlertRule)]);
+        let thresholds = ThresholdSet::default();
+        let analyzer = TrackingAnalyzer::new();
+        let notifier = MockNotifier;
+        let alert_store = MockAlertStore::new();
+        let snapshot_store = MockSnapshotStore::new();
+
+        let service = MonitorService::new(
+            &collector,
+            &rule_engine,
+            &thresholds,
+            &analyzer,
+            &notifier,
+            &alert_store,
+            &snapshot_store,
+            true,
+            OperationMode::Observe,
+        );
+
+        let result = service.run_once().await;
+        assert!(result.is_ok());
+        let cycle = result.expect("run_once failed");
+        assert_eq!(cycle.alerts_count, 1);
+        assert!(!*analyzer.called.lock().expect("mutex poisoned"));
+    }
+
+    #[tokio::test]
+    async fn run_once_observe_mode_skips_auto_execute() {
+        let collector = MockCollector;
+        let rule_engine = RuleEngine::new(vec![Box::new(AlwaysAlertRule)]);
+        let thresholds = ThresholdSet::default();
+        let analyzer = MockAnalyzer;
+        let notifier = MockNotifier;
+        let alert_store = MockAlertStore::new();
+        let snapshot_store = MockSnapshotStore::new();
+
+        let service = MonitorService::new(
+            &collector,
+            &rule_engine,
+            &thresholds,
+            &analyzer,
+            &notifier,
+            &alert_store,
+            &snapshot_store,
+            false,
+            OperationMode::Observe,
+        );
+
+        let result = service.run_once().await;
+        assert!(result.is_ok());
+        let cycle = result.expect("run_once failed");
+        assert_eq!(cycle.alerts_count, 1);
+        assert_eq!(cycle.auto_actions_run, 0);
+    }
+
+    struct DangerousActionRule;
+
+    impl Rule for DangerousActionRule {
+        fn name(&self) -> &'static str {
+            "dangerous_action"
+        }
+
+        fn evaluate(&self, _snapshot: &SystemSnapshot, _thresholds: &ThresholdSet) -> Vec<Alert> {
+            vec![Alert {
+                timestamp: Utc::now(),
+                severity: Severity::High,
+                rule: "dangerous_action".to_string(),
+                title: "Dangerous Alert".to_string(),
+                details: "Test details".to_string(),
+                suggested_actions: vec![SuggestedAction {
+                    description: "Kill process".to_string(),
+                    command: "kill -9 1234".to_string(),
+                    risk: ActionRisk::Dangerous,
+                }],
+            }]
+        }
+    }
+
+    #[tokio::test]
+    async fn run_once_auto_mode_skips_dangerous_actions() {
+        let collector = MockCollector;
+        let rule_engine = RuleEngine::new(vec![Box::new(DangerousActionRule)]);
+        let thresholds = ThresholdSet::default();
+        let analyzer = MockAnalyzer;
+        let notifier = MockNotifier;
+        let alert_store = MockAlertStore::new();
+        let snapshot_store = MockSnapshotStore::new();
+
+        let service = MonitorService::new(
+            &collector,
+            &rule_engine,
+            &thresholds,
+            &analyzer,
+            &notifier,
+            &alert_store,
+            &snapshot_store,
+            false,
+            OperationMode::Auto,
+        );
+
+        let result = service.run_once().await;
+        assert!(result.is_ok());
+        let cycle = result.expect("run_once failed");
+        assert_eq!(cycle.alerts_count, 1);
+        assert_eq!(cycle.auto_actions_run, 0);
     }
 }

@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use clap::{CommandFactory, Parser};
+use clap::Parser;
 use colored::Colorize;
 use tracing_subscriber::EnvFilter;
 
@@ -97,12 +97,13 @@ async fn main() -> anyhow::Result<()> {
             )
             .await?;
         }
-        Some(Commands::Daemon { .. }) => {
+        Some(Commands::Daemon { .. }) | None => {
             let store = SqliteStore::new(&config.database.path)?;
             if let Err(e) = store.cleanup_old(config.database.retention_hours) {
                 tracing::warn!("Échec nettoyage anciennes données : {e}");
             }
             print_banner();
+            tracing::info!("Mode : {effective_mode}");
             let service = MonitorService::new(
                 &collector,
                 &rule_engine,
@@ -112,6 +113,7 @@ async fn main() -> anyhow::Result<()> {
                 &store,
                 &store,
                 config.ai.enabled,
+                effective_mode,
             );
             run_daemon(&service, config.general.interval_secs).await?;
         }
@@ -123,10 +125,6 @@ async fn main() -> anyhow::Result<()> {
         }
         Some(Commands::Config { .. }) => {
             eprintln!("Commande config pas encore implémentée");
-        }
-        None => {
-            print_banner();
-            Cli::command().print_help()?;
         }
     }
 

@@ -4,36 +4,49 @@ use crate::application::services::monitor::MonitorService;
 
 /// Run the monitoring daemon loop at the configured interval.
 ///
-/// This function runs indefinitely until the process is terminated.
+/// The daemon runs until it receives a SIGINT/SIGTERM signal (Ctrl+C), at which
+/// point it shuts down gracefully and returns `Ok(())`.
 /// Errors during individual monitoring cycles are logged but do not stop the daemon.
 ///
 /// # Errors
 ///
-/// In practice this function never returns; the `Result` return type exists
-/// only for compatibility with the `#[tokio::main]` entry point.
+/// Returns an error if the underlying monitoring service encounters a fatal error.
 pub async fn run_daemon(service: &MonitorService<'_>, interval_secs: u64) -> anyhow::Result<()> {
-    println!("Démarrage du daemon vigil (intervalle : {interval_secs}s)...");
+    tracing::info!("Daemon démarré (intervalle : {interval_secs}s)");
     let mut interval = tokio::time::interval(Duration::from_secs(interval_secs));
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+    let shutdown = tokio::signal::ctrl_c();
+    tokio::pin!(shutdown);
+
     loop {
-        interval.tick().await;
-        match service.run_once().await {
-            Ok(result) => {
-                tracing::info!(
-                    "Cycle terminé : {} alerte(s), snapshot {}",
-                    result.alerts_count,
-                    if result.snapshot_saved {
-                        "sauvegardé"
-                    } else {
-                        "échoué"
+        tokio::select! {
+            _ = interval.tick() => {
+                match service.run_once().await {
+                    Ok(result) => {
+                        tracing::info!(
+                            "Cycle terminé : {} alerte(s), snapshot {}",
+                            result.alerts_count,
+                            if result.snapshot_saved {
+                                "sauvegardé"
+                            } else {
+                                "échoué"
+                            }
+                        );
                     }
-                );
+                    Err(e) => {
+                        tracing::error!("Erreur cycle monitoring : {e}");
+                    }
+                }
             }
-            Err(e) => {
-                tracing::error!("Erreur cycle monitoring : {e}");
+            _ = &mut shutdown => {
+                tracing::info!("Signal d'arrêt reçu, fermeture propre...");
+                println!("\nArrêt de Vigil...");
+                break;
             }
         }
     }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -48,6 +61,7 @@ mod tests {
     use crate::domain::ports::notifier::{NotificationError, Notifier};
     use crate::domain::ports::store::{AlertStore, SnapshotStore, StoreError};
     use crate::domain::rules::RuleEngine;
+    use crate::domain::value_objects::operation_mode::OperationMode;
     use crate::domain::value_objects::thresholds::ThresholdSet;
     use async_trait::async_trait;
     use chrono::Utc;
@@ -157,12 +171,13 @@ mod tests {
             &MockStore,
             &MockStore,
             false,
+            OperationMode::Observe,
         );
 
         let result =
             tokio::time::timeout(Duration::from_millis(200), run_daemon(&service, 1)).await;
 
-        // Timeout expected — daemon continues despite errors
+        // Timeout expected — daemon continues despite errors without ctrl_c signal
         assert!(result.is_err());
     }
 
@@ -183,12 +198,13 @@ mod tests {
             &MockStore,
             &MockStore,
             false,
+            OperationMode::Observe,
         );
 
         let result =
             tokio::time::timeout(Duration::from_millis(200), run_daemon(&service, 1)).await;
 
-        // Timeout is expected — the daemon loops forever
+        // Timeout is expected — the daemon loops until ctrl_c signal
         assert!(result.is_err());
     }
 }
