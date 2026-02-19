@@ -3,6 +3,7 @@ use std::sync::Mutex;
 use sysinfo::System;
 
 use super::disk_collector::DiskCollector;
+use super::journal_collector::JournalCollector;
 use crate::domain::entities::{
     process::{ProcessInfo, ProcessState},
     snapshot::{CpuInfo, MemoryInfo, SystemSnapshot},
@@ -39,6 +40,7 @@ fn avg_cpu_usage(per_core: &[f32]) -> f32 {
 pub struct SysinfoCollector {
     sys: Mutex<System>,
     disk_collector: DiskCollector,
+    journal_collector: JournalCollector,
 }
 
 impl SysinfoCollector {
@@ -50,6 +52,7 @@ impl SysinfoCollector {
         Self {
             sys: Mutex::new(sys),
             disk_collector: DiskCollector::new(),
+            journal_collector: JournalCollector::new(),
         }
     }
 }
@@ -80,7 +83,7 @@ impl SystemCollector for SysinfoCollector {
             cpu,
             processes,
             disks,
-            journal_entries: Vec::new(),
+            journal_entries: self.journal_collector.collect().unwrap_or_default(),
         })
     }
 }
@@ -210,10 +213,6 @@ mod tests {
         assert!(
             !snapshot.processes.is_empty(),
             "should have at least 1 process"
-        );
-        assert!(
-            snapshot.journal_entries.is_empty(),
-            "journal should be empty"
         );
     }
 
