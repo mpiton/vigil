@@ -4,8 +4,12 @@ use crate::application::services::monitor::MonitorService;
 
 /// Run the monitoring daemon loop at the configured interval.
 ///
-/// The daemon runs until it receives a SIGINT/SIGTERM signal (Ctrl+C), at which
-/// point it shuts down gracefully and returns `Ok(())`.
+/// The daemon runs until it receives a SIGINT signal (Ctrl+C) via
+/// [`tokio::signal::ctrl_c()`], at which point it shuts down gracefully and
+/// returns `Ok(())`. Note: SIGTERM is **not** handled — if systemd or container
+/// orchestration requires SIGTERM support, add a handler via
+/// `tokio::signal::unix::signal(SignalKind::terminate())`.
+///
 /// Errors during individual monitoring cycles are logged but do not stop the daemon.
 ///
 /// # Errors

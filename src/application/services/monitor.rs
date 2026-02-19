@@ -103,19 +103,36 @@ impl<'a> MonitorService<'a> {
                         match tokio::process::Command::new("sh")
                             .arg("-c")
                             .arg(&action.command)
-                            .output()
-                            .await
+                            .spawn()
                         {
-                            Ok(output) => {
-                                if output.status.success() {
-                                    tracing::info!("Commande réussie : {}", action.command);
-                                    auto_actions_run += 1;
-                                } else {
-                                    tracing::warn!("Commande échouée : {}", action.command);
+                            Ok(child) => {
+                                let timeout = std::time::Duration::from_secs(30);
+                                match tokio::time::timeout(timeout, child.wait_with_output()).await
+                                {
+                                    Ok(Ok(output)) => {
+                                        if output.status.success() {
+                                            tracing::info!("Commande réussie : {}", action.command);
+                                            auto_actions_run += 1;
+                                        } else {
+                                            tracing::warn!("Commande échouée : {}", action.command);
+                                        }
+                                    }
+                                    Ok(Err(e)) => {
+                                        tracing::warn!(
+                                            "Erreur attente commande '{}' : {e}",
+                                            action.command
+                                        );
+                                    }
+                                    Err(_) => {
+                                        tracing::warn!(
+                                            "Commande '{}' interrompue (timeout 30s)",
+                                            action.command
+                                        );
+                                    }
                                 }
                             }
                             Err(e) => {
-                                tracing::warn!("Échec exécution '{}' : {e}", action.command);
+                                tracing::warn!("Échec lancement '{}' : {e}", action.command);
                             }
                         }
                     }
