@@ -365,6 +365,7 @@ impl From<&ThresholdConfig> for ThresholdSet {
             disk_warning,
             disk_critical,
             cpu_load_factor: config.cpu_load_factor.max(0.1),
+            max_duplicate_processes: config.max_duplicate_processes.max(1),
         }
     }
 }
