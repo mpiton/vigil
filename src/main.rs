@@ -57,7 +57,7 @@ async fn main() -> anyhow::Result<()> {
             tokio::time::sleep(Duration::from_millis(500)).await;
             run_status(&collector, json)?;
         }
-        Some(Commands::Scan { json, .. }) => {
+        Some(Commands::Scan { ai, json }) => {
             tokio::time::sleep(Duration::from_millis(500)).await;
             run_scan(
                 &collector,
@@ -65,6 +65,7 @@ async fn main() -> anyhow::Result<()> {
                 &thresholds,
                 &*analyzer,
                 &notifier,
+                ai,
                 json,
             )
             .await?;

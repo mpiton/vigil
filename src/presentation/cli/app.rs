@@ -144,4 +144,60 @@ mod tests {
         let cli = Cli::try_parse_from(["vigil", "explain", "42"]).unwrap_or_else(|e| panic!("{e}"));
         assert!(matches!(cli.command, Some(Commands::Explain { pid: 42 })));
     }
+
+    #[test]
+    fn parse_scan_command() {
+        let cli = Cli::try_parse_from(["vigil", "scan"]).unwrap_or_else(|e| panic!("{e}"));
+        assert!(matches!(
+            cli.command,
+            Some(Commands::Scan {
+                ai: false,
+                json: false
+            })
+        ));
+    }
+
+    #[test]
+    fn parse_scan_with_ai() {
+        let cli = Cli::try_parse_from(["vigil", "scan", "--ai"]).unwrap_or_else(|e| panic!("{e}"));
+        assert!(matches!(
+            cli.command,
+            Some(Commands::Scan {
+                ai: true,
+                json: false
+            })
+        ));
+    }
+
+    #[test]
+    fn parse_scan_with_json() {
+        let cli =
+            Cli::try_parse_from(["vigil", "scan", "--json"]).unwrap_or_else(|e| panic!("{e}"));
+        assert!(matches!(
+            cli.command,
+            Some(Commands::Scan {
+                ai: false,
+                json: true
+            })
+        ));
+    }
+
+    #[test]
+    fn parse_scan_with_ai_and_json() {
+        let cli = Cli::try_parse_from(["vigil", "scan", "--ai", "--json"])
+            .unwrap_or_else(|e| panic!("{e}"));
+        assert!(matches!(
+            cli.command,
+            Some(Commands::Scan {
+                ai: true,
+                json: true
+            })
+        ));
+    }
+
+    #[test]
+    fn parse_scan_alias() {
+        let cli = Cli::try_parse_from(["vigil", "sc"]).unwrap_or_else(|e| panic!("{e}"));
+        assert!(matches!(cli.command, Some(Commands::Scan { .. })));
+    }
 }
