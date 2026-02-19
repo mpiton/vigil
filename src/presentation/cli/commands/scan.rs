@@ -214,6 +214,20 @@ mod tests {
         }
     }
 
+    struct FailingNotifier;
+
+    impl Notifier for FailingNotifier {
+        fn notify(&self, _alert: &Alert) -> Result<(), NotificationError> {
+            Err(NotificationError::SendFailed("dbus down".into()))
+        }
+        fn notify_ai_diagnostic(
+            &self,
+            _diagnostic: &AiDiagnostic,
+        ) -> Result<(), NotificationError> {
+            Err(NotificationError::SendFailed("dbus down".into()))
+        }
+    }
+
     struct FailingStore;
 
     impl AlertStore for FailingStore {
@@ -536,6 +550,56 @@ mod tests {
             &MockStore,
             true,
             true,
+        )
+        .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn scan_human_notification_failure_continues() {
+        disable_colors();
+        let collector = MockCollector {
+            snapshot: healthy_snapshot(),
+        };
+        let engine = RuleEngine::new(vec![Box::new(AlwaysAlertRule)]);
+        let thresholds = ThresholdSet::default();
+        let analyzer = MockAnalyzer;
+        let notifier = FailingNotifier;
+        let result = run_scan(
+            &collector,
+            &engine,
+            &thresholds,
+            &analyzer,
+            &notifier,
+            &MockStore,
+            &MockStore,
+            false,
+            false,
+        )
+        .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn scan_human_diagnostic_notification_failure_continues() {
+        disable_colors();
+        let collector = MockCollector {
+            snapshot: healthy_snapshot(),
+        };
+        let engine = RuleEngine::new(vec![Box::new(AlwaysAlertRule)]);
+        let thresholds = ThresholdSet::default();
+        let analyzer = DiagnosticAnalyzer;
+        let notifier = FailingNotifier;
+        let result = run_scan(
+            &collector,
+            &engine,
+            &thresholds,
+            &analyzer,
+            &notifier,
+            &MockStore,
+            &MockStore,
+            true,
+            false,
         )
         .await;
         assert!(result.is_ok());

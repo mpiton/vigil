@@ -600,6 +600,33 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn run_once_ai_returns_none_with_alerts() {
+        let collector = MockCollector;
+        let rule_engine = RuleEngine::new(vec![Box::new(AlwaysAlertRule)]);
+        let thresholds = ThresholdSet::default();
+        let analyzer = MockAnalyzer; // returns Ok(None)
+        let notifier = MockNotifier;
+        let alert_store = MockAlertStore::new();
+        let snapshot_store = MockSnapshotStore::new();
+
+        let service = MonitorService::new(
+            &collector,
+            &rule_engine,
+            &thresholds,
+            &analyzer,
+            &notifier,
+            &alert_store,
+            &snapshot_store,
+            true, // AI enabled
+        );
+
+        let result = service.run_once().await;
+        assert!(result.is_ok());
+        let cycle = result.expect("run_once failed");
+        assert_eq!(cycle.alerts_count, 1);
+    }
+
+    #[tokio::test]
     async fn run_once_ai_diagnostic_notification_failure_continues() {
         let collector = MockCollector;
         let rule_engine = RuleEngine::new(vec![Box::new(AlwaysAlertRule)]);
