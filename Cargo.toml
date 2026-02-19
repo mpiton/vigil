@@ -18,7 +18,7 @@ expect_used = "warn"
 
 [dependencies]
 # Async runtime
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "process"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "process", "signal"] }
 
 # System monitoring
 sysinfo = "0.32"
