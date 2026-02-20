@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
+use crate::domain::value_objects::severity::Severity;
 use crate::domain::value_objects::thresholds::ThresholdSet;
 use crate::domain::value_objects::OperationMode;
 
@@ -84,6 +85,8 @@ pub struct NotificationConfig {
     pub log_file: Option<String>,
     #[serde(default)]
     pub webhook_url: Option<String>,
+    #[serde(default)]
+    pub webhook_min_severity: Option<Severity>,
 }
 
 /// Allowlisted commands to ignore or protect from termination.
@@ -251,6 +254,7 @@ impl Default for NotificationConfig {
             terminal: default_true(),
             log_file: None,
             webhook_url: None,
+            webhook_min_severity: None,
         }
     }
 }
@@ -404,6 +408,7 @@ mod tests {
         assert!(config.notifications.terminal);
         assert!(config.notifications.log_file.is_none());
         assert!(config.notifications.webhook_url.is_none());
+        assert!(config.notifications.webhook_min_severity.is_none());
         assert_eq!(config.allowlist.ignore_commands.len(), 4);
         assert_eq!(config.allowlist.protected_commands.len(), 4);
         assert_eq!(config.database.path, "~/.local/share/vigil/vigil.db");

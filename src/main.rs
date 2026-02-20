@@ -11,7 +11,9 @@ use vigil::domain::value_objects::operation_mode::OperationMode;
 use vigil::domain::value_objects::thresholds::ThresholdSet;
 use vigil::infrastructure::ai::create_ai_analyzer;
 use vigil::infrastructure::collectors::sysinfo_collector::SysinfoCollector;
+use vigil::infrastructure::notifications::composite::CompositeNotifier;
 use vigil::infrastructure::notifications::terminal::TerminalNotifier;
+use vigil::infrastructure::notifications::webhook::WebhookNotifier;
 use vigil::infrastructure::persistence::sqlite_store::SqliteStore;
 use vigil::presentation::cli::app::{Cli, Commands};
 use vigil::presentation::cli::commands::daemon::run_daemon;
@@ -73,7 +75,18 @@ async fn main() -> anyhow::Result<()> {
     // Manual DI — main.rs is the only place that knows concrete types
     let collector = SysinfoCollector::new();
     let effective_mode = resolve_mode(cli.command.as_ref(), config.general.mode)?;
-    let notifier = TerminalNotifier::new(effective_mode);
+
+    // Build composite notifier — terminal + optional webhook
+    let mut notifiers: Vec<Box<dyn vigil::domain::ports::notifier::Notifier>> =
+        vec![Box::new(TerminalNotifier::new(effective_mode))];
+    if let Some(ref url) = config.notifications.webhook_url {
+        let min_severity = config
+            .notifications
+            .webhook_min_severity
+            .unwrap_or(vigil::domain::value_objects::severity::Severity::High);
+        notifiers.push(Box::new(WebhookNotifier::new(url, min_severity)));
+    }
+    let notifier = CompositeNotifier::new(notifiers);
     let rules = default_rules();
     let rule_engine = RuleEngine::new(rules);
     let thresholds = ThresholdSet::from(&config.thresholds);
