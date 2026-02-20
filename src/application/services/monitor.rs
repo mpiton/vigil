@@ -185,6 +185,11 @@ impl<'a> MonitorService<'a> {
                 continue;
             }
 
+            if let Err(reason) = validate_command(&action.command) {
+                tracing::warn!("Action rejetée ({reason}) : {}", action.command);
+                continue;
+            }
+
             tracing::info!("Auto-exécution : {}", action.description);
 
             let (success, output_str) = self.run_shell_command(&action.command).await;
@@ -267,11 +272,40 @@ impl<'a> MonitorService<'a> {
 }
 
 /// Check if a shell command targets a protected process.
-/// Matches if any protected command name appears as a word in the command string.
+/// Matches if any protected command name appears as a word in the command string,
+/// handling path prefixes and quoted tokens.
 fn is_command_protected(command: &str, protected: &[String]) -> bool {
-    protected
-        .iter()
-        .any(|p| command.split_whitespace().any(|word| word == p))
+    protected.iter().any(|p| {
+        command.split_whitespace().any(|word| {
+            let stripped = word.trim_matches(|c| c == '\'' || c == '"');
+            let basename = std::path::Path::new(stripped)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or(stripped);
+            stripped == p || basename == p
+        })
+    })
+}
+
+/// Validate a shell command for dangerous metacharacters.
+///
+/// Rejects commands containing `;` (command chaining), `` ` `` (backtick substitution),
+/// or `$(` (dollar-paren substitution). Allows `&&`, `||`, `|`, and `>`.
+///
+/// # Errors
+///
+/// Returns `Err` with a description if the command contains a forbidden pattern.
+fn validate_command(command: &str) -> Result<(), String> {
+    if command.contains(';') {
+        return Err("séparateur de commandes ';' interdit".to_string());
+    }
+    if command.contains('`') {
+        return Err("substitution de commande '`' interdite".to_string());
+    }
+    if command.contains("$(") {
+        return Err("substitution de commande '$(' interdite".to_string());
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1444,5 +1478,40 @@ mod tests {
     #[test]
     fn is_command_protected_empty_list() {
         assert!(!is_command_protected("kill 1234", &[]));
+    }
+
+    #[test]
+    fn validate_command_rejects_semicolon() {
+        assert!(validate_command("echo safe; rm -rf /").is_err());
+    }
+
+    #[test]
+    fn validate_command_rejects_backtick() {
+        assert!(validate_command("echo `whoami`").is_err());
+    }
+
+    #[test]
+    fn validate_command_rejects_dollar_paren() {
+        assert!(validate_command("echo $(cat /etc/passwd)").is_err());
+    }
+
+    #[test]
+    fn validate_command_allows_safe_shell() {
+        assert!(validate_command("sync && echo 3 > /proc/sys/vm/drop_caches").is_ok());
+        assert!(validate_command("echo hello").is_ok());
+        assert!(validate_command("kill -15 1234").is_ok());
+    }
+
+    #[test]
+    fn is_command_protected_matches_basename() {
+        let protected = vec!["systemd".to_string()];
+        assert!(is_command_protected("kill /usr/bin/systemd", &protected));
+    }
+
+    #[test]
+    fn is_command_protected_matches_quoted() {
+        let protected = vec!["sshd".to_string()];
+        assert!(is_command_protected("restart 'sshd'", &protected));
+        assert!(is_command_protected("restart \"sshd\"", &protected));
     }
 }

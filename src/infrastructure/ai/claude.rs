@@ -194,7 +194,7 @@ struct RawSuggestedAction {
 }
 
 fn default_risk() -> String {
-    "Safe".to_string()
+    "Dangerous".to_string()
 }
 
 /// Truncate a string to at most `max_bytes` without splitting a UTF-8 codepoint.
@@ -485,6 +485,14 @@ mod tests {
     fn parse_response_with_unknown_risk_defaults_dangerous() {
         let json = br#"{"summary":"s","details":"d","severity":"Low","confidence":0.5,"suggested_actions":[{"description":"test","command":"echo test","risk":"unknown"}]}"#;
         let diag = parse_response(json).expect("should parse");
+        assert_eq!(diag.suggested_actions[0].risk, ActionRisk::Dangerous);
+    }
+
+    #[test]
+    fn parse_response_omitted_risk_defaults_dangerous() {
+        let json = br#"{"summary":"s","details":"d","severity":"Low","confidence":0.5,"suggested_actions":[{"description":"test","command":"echo test"}]}"#;
+        let diag = parse_response(json).expect("should parse");
+        assert_eq!(diag.suggested_actions.len(), 1);
         assert_eq!(diag.suggested_actions[0].risk, ActionRisk::Dangerous);
     }
 

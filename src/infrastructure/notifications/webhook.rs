@@ -72,16 +72,16 @@ impl WebhookNotifier {
     /// Sends a JSON payload to the webhook URL. Best-effort: errors are logged
     /// and swallowed so that a failing webhook never blocks the monitoring cycle.
     fn send_payload(&self, payload: &Value) {
-        let result = tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current()
-                .block_on(self.client.post(&self.url).json(payload).send())
+        let client = self.client.clone();
+        let url = self.url.clone();
+        let payload = payload.clone();
+        tokio::spawn(async move {
+            match client.post(&url).json(&payload).send().await {
+                Ok(resp) if resp.status().is_success() => {}
+                Ok(resp) => warn!("Webhook HTTP {}", resp.status()),
+                Err(e) => warn!("Webhook error: {e}"),
+            }
         });
-
-        match result {
-            Ok(resp) if resp.status().is_success() => {}
-            Ok(resp) => warn!("Webhook HTTP {}", resp.status()),
-            Err(e) => warn!("Webhook error: {e}"),
-        }
     }
 
     // --- Color helpers ---
