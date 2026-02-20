@@ -46,6 +46,13 @@ pub trait AlertStore: Send + Sync {
     ///
     /// Returns `StoreError` if the read operation fails.
     fn get_recent_alerts(&self, count: usize) -> Result<Vec<Alert>, StoreError>;
+
+    /// Retrieve alerts created since the given timestamp.
+    ///
+    /// # Errors
+    ///
+    /// Returns `StoreError` if the read operation fails.
+    fn get_alerts_since(&self, since: DateTime<Utc>) -> Result<Vec<Alert>, StoreError>;
 }
 
 pub trait SnapshotStore: Send + Sync {
@@ -62,6 +69,13 @@ pub trait SnapshotStore: Send + Sync {
     ///
     /// Returns `StoreError` if the read operation fails.
     fn get_latest_snapshot(&self) -> Result<Option<SystemSnapshot>, StoreError>;
+
+    /// Retrieve snapshots captured since the given timestamp.
+    ///
+    /// # Errors
+    ///
+    /// Returns `StoreError` if the read operation fails.
+    fn get_snapshots_since(&self, since: DateTime<Utc>) -> Result<Vec<SystemSnapshot>, StoreError>;
 }
 
 pub trait ActionLogStore: Send + Sync {

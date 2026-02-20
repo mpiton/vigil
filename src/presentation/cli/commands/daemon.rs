@@ -139,6 +139,12 @@ mod tests {
         fn get_recent_alerts(&self, _count: usize) -> Result<Vec<Alert>, StoreError> {
             Ok(vec![])
         }
+        fn get_alerts_since(
+            &self,
+            _since: chrono::DateTime<chrono::Utc>,
+        ) -> Result<Vec<Alert>, StoreError> {
+            Ok(vec![])
+        }
     }
 
     impl SnapshotStore for MockStore {
@@ -147,6 +153,12 @@ mod tests {
         }
         fn get_latest_snapshot(&self) -> Result<Option<SystemSnapshot>, StoreError> {
             Ok(None)
+        }
+        fn get_snapshots_since(
+            &self,
+            _since: chrono::DateTime<chrono::Utc>,
+        ) -> Result<Vec<SystemSnapshot>, StoreError> {
+            Ok(vec![])
         }
     }
 
