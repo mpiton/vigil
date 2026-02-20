@@ -292,6 +292,22 @@ mod tests {
     }
 
     #[test]
+    fn notify_action_executed_success() {
+        let notifier = DesktopNotifier::new();
+        let action = make_action(ActionRisk::Safe);
+        let result = notifier.notify_action_executed(&action, true, "ok");
+        assert!(result.is_ok() || matches!(result, Err(NotificationError::ChannelUnavailable(_))));
+    }
+
+    #[test]
+    fn notify_action_executed_failure() {
+        let notifier = DesktopNotifier::new();
+        let action = make_action(ActionRisk::Dangerous);
+        let result = notifier.notify_action_executed(&action, false, "error");
+        assert!(result.is_ok() || matches!(result, Err(NotificationError::ChannelUnavailable(_))));
+    }
+
+    #[test]
     #[allow(clippy::assertions_on_constants)]
     fn constants_are_reasonable() {
         assert!(MAX_BODY_CHARS >= 100);

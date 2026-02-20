@@ -316,6 +316,50 @@ mod tests {
     }
 
     #[test]
+    fn notify_action_executed_writes_json_line() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let log_path = dir.path().join("vigil.log");
+        let notifier = LogFileNotifier {
+            path: log_path.clone(),
+        };
+
+        let action = make_action(ActionRisk::Safe);
+        let result = notifier.notify_action_executed(&action, true, "done");
+        assert!(result.is_ok());
+
+        let content = std::fs::read_to_string(&log_path).expect("read log");
+        let parsed: serde_json::Value = serde_json::from_str(content.trim()).expect("parse JSON");
+
+        assert_eq!(parsed["type"], "action_executed");
+        assert_eq!(parsed["description"], "Action de test");
+        assert_eq!(parsed["command"], "echo test");
+        assert_eq!(parsed["risk"], "safe");
+        assert!(parsed["success"].as_bool().expect("success bool"));
+        assert_eq!(parsed["output"], "done");
+        assert!(parsed["timestamp"].is_string());
+    }
+
+    #[test]
+    fn notify_action_executed_failure_case() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let log_path = dir.path().join("vigil.log");
+        let notifier = LogFileNotifier {
+            path: log_path.clone(),
+        };
+
+        let action = make_action(ActionRisk::Moderate);
+        let result = notifier.notify_action_executed(&action, false, "error output");
+        assert!(result.is_ok());
+
+        let content = std::fs::read_to_string(&log_path).expect("read log");
+        let parsed: serde_json::Value = serde_json::from_str(content.trim()).expect("parse JSON");
+
+        assert_eq!(parsed["risk"], "moderate");
+        assert!(!parsed["success"].as_bool().expect("success bool"));
+        assert_eq!(parsed["output"], "error output");
+    }
+
+    #[test]
     fn notify_returns_error_on_invalid_path() {
         let dir = tempfile::tempdir().expect("tempdir");
         let blocker = dir.path().join("blocker");

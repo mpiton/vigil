@@ -354,6 +354,32 @@ mod tests {
     }
 
     #[test]
+    fn notify_action_executed_success() {
+        disable_colors();
+        let notifier = TerminalNotifier::new(OperationMode::Auto);
+        let action = make_action(ActionRisk::Safe);
+        assert!(notifier.notify_action_executed(&action, true, "ok").is_ok());
+    }
+
+    #[test]
+    fn notify_action_executed_failure() {
+        disable_colors();
+        let notifier = TerminalNotifier::new(OperationMode::Auto);
+        let action = make_action(ActionRisk::Dangerous);
+        assert!(notifier
+            .notify_action_executed(&action, false, "error\nline2\nline3\nline4\nline5\nline6")
+            .is_ok());
+    }
+
+    #[test]
+    fn notify_action_executed_empty_output() {
+        disable_colors();
+        let notifier = TerminalNotifier::new(OperationMode::Observe);
+        let action = make_action(ActionRisk::Moderate);
+        assert!(notifier.notify_action_executed(&action, true, "").is_ok());
+    }
+
+    #[test]
     fn sanitize_strips_control_characters() {
         let input = "hello\x1b[2Jworld\x07done";
         let result = sanitize(input);
