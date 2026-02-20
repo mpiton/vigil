@@ -16,6 +16,7 @@ use vigil::infrastructure::persistence::sqlite_store::SqliteStore;
 use vigil::presentation::cli::app::{Cli, Commands};
 use vigil::presentation::cli::commands::daemon::run_daemon;
 use vigil::presentation::cli::commands::explain::run_explain;
+use vigil::presentation::cli::commands::kill::run_kill;
 use vigil::presentation::cli::commands::report::run_report;
 use vigil::presentation::cli::commands::scan::run_scan;
 use vigil::presentation::cli::commands::status::run_status;
@@ -35,6 +36,27 @@ fn setup_tracing(verbose: bool) {
     tracing_subscriber::fmt().with_env_filter(filter).init();
 }
 
+fn resolve_mode(
+    command: Option<&Commands>,
+    config_mode: OperationMode,
+) -> anyhow::Result<OperationMode> {
+    if let Some(Commands::Daemon {
+        mode: Some(ref m), ..
+    }) = command
+    {
+        match m.to_lowercase().as_str() {
+            "observe" => Ok(OperationMode::Observe),
+            "suggest" => Ok(OperationMode::Suggest),
+            "auto" => Ok(OperationMode::Auto),
+            other => {
+                anyhow::bail!("Mode inconnu : '{other}'. Modes valides : observe, suggest, auto");
+            }
+        }
+    } else {
+        Ok(config_mode)
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
@@ -50,23 +72,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Manual DI — main.rs is the only place that knows concrete types
     let collector = SysinfoCollector::new();
-
-    // Resolve effective mode: CLI --mode override takes precedence for daemon
-    let effective_mode = if let Some(Commands::Daemon {
-        mode: Some(ref m), ..
-    }) = cli.command
-    {
-        match m.to_lowercase().as_str() {
-            "observe" => OperationMode::Observe,
-            "suggest" => OperationMode::Suggest,
-            "auto" => OperationMode::Auto,
-            other => {
-                anyhow::bail!("Mode inconnu : '{other}'. Modes valides : observe, suggest, auto");
-            }
-        }
-    } else {
-        config.general.mode
-    };
+    let effective_mode = resolve_mode(cli.command.as_ref(), config.general.mode)?;
     let notifier = TerminalNotifier::new(effective_mode);
     let rules = default_rules();
     let rule_engine = RuleEngine::new(rules);
@@ -132,8 +138,18 @@ async fn main() -> anyhow::Result<()> {
             tokio::time::sleep(Duration::from_millis(500)).await;
             run_explain(&collector, &*analyzer, config.ai.enabled, pid).await?;
         }
-        Some(Commands::Kill { .. }) => {
-            eprintln!("Commande kill pas encore implémentée");
+        Some(Commands::Kill { pid, force }) => {
+            let store = SqliteStore::new(&config.database.path).ok();
+            let manager = vigil::infrastructure::os::process_manager::OsProcessManager::new();
+            run_kill(
+                &collector,
+                &manager,
+                store
+                    .as_ref()
+                    .map(|s| s as &dyn vigil::domain::ports::store::ActionLogStore),
+                pid,
+                force,
+            )?;
         }
         Some(Commands::Config { .. }) => {
             eprintln!("Commande config pas encore implémentée");
