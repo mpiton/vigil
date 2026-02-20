@@ -251,6 +251,17 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_explain_ai_cooldown_returns_none() {
+        disable_colors();
+        let collector = MockCollector {
+            snapshot: make_snapshot_with_process(1234),
+        };
+        let analyzer = NoopAnalyzer;
+        let result = run_explain(&collector, &analyzer, true, 1234).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
     async fn test_explain_ai_error_continues() {
         disable_colors();
         let collector = MockCollector {

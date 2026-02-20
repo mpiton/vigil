@@ -423,4 +423,48 @@ mod tests {
         let diag = parse_response(json).expect("should parse");
         assert!((diag.confidence - 1.0).abs() < f64::EPSILON);
     }
+
+    #[test]
+    fn truncate_str_short_string_unchanged() {
+        assert_eq!(truncate_str("hello", 10), "hello");
+    }
+
+    #[test]
+    fn truncate_str_exact_boundary() {
+        assert_eq!(truncate_str("hello", 5), "hello");
+    }
+
+    #[test]
+    fn truncate_str_cuts_at_limit() {
+        assert_eq!(truncate_str("hello world", 5), "hello");
+    }
+
+    #[test]
+    fn truncate_str_respects_utf8_boundary() {
+        // 'é' is 2 bytes in UTF-8: if we cut at byte 1, we must back up to 0
+        let s = "é";
+        assert_eq!(s.len(), 2);
+        assert_eq!(truncate_str(s, 1), "");
+    }
+
+    #[test]
+    fn truncate_str_multibyte_preserves_complete_chars() {
+        // "café" = 'c'(1) + 'a'(1) + 'f'(1) + 'é'(2) = 5 bytes
+        let s = "café";
+        assert_eq!(s.len(), 5);
+        // Cutting at 4 bytes would split 'é', so back up to 3
+        assert_eq!(truncate_str(s, 4), "caf");
+        // Cutting at 5 keeps everything
+        assert_eq!(truncate_str(s, 5), "café");
+    }
+
+    #[test]
+    fn truncate_str_empty_string() {
+        assert_eq!(truncate_str("", 10), "");
+    }
+
+    #[test]
+    fn truncate_str_zero_limit() {
+        assert_eq!(truncate_str("hello", 0), "");
+    }
 }
