@@ -1,7 +1,8 @@
+use super::baseline::update_baselines;
 use crate::domain::ports::analyzer::AiAnalyzer;
 use crate::domain::ports::collector::SystemCollector;
 use crate::domain::ports::notifier::Notifier;
-use crate::domain::ports::store::{AlertStore, SnapshotStore};
+use crate::domain::ports::store::{AlertStore, BaselineStore, SnapshotStore};
 use crate::domain::rules::RuleEngine;
 use crate::domain::value_objects::action_risk::ActionRisk;
 use crate::domain::value_objects::operation_mode::OperationMode;
@@ -24,6 +25,7 @@ pub struct MonitorService<'a> {
     notifier: &'a dyn Notifier,
     alert_store: &'a dyn AlertStore,
     snapshot_store: &'a dyn SnapshotStore,
+    baseline_store: &'a dyn BaselineStore,
     ai_enabled: bool,
     operation_mode: OperationMode,
 }
@@ -39,6 +41,7 @@ impl<'a> MonitorService<'a> {
         notifier: &'a dyn Notifier,
         alert_store: &'a dyn AlertStore,
         snapshot_store: &'a dyn SnapshotStore,
+        baseline_store: &'a dyn BaselineStore,
         ai_enabled: bool,
         operation_mode: OperationMode,
     ) -> Self {
@@ -50,6 +53,7 @@ impl<'a> MonitorService<'a> {
             notifier,
             alert_store,
             snapshot_store,
+            baseline_store,
             ai_enabled,
             operation_mode,
         }
@@ -70,6 +74,12 @@ impl<'a> MonitorService<'a> {
                 false
             }
         };
+
+        if snapshot_saved {
+            if let Err(e) = update_baselines(self.baseline_store, &snapshot) {
+                tracing::warn!("Échec mise à jour baselines : {e}");
+            }
+        }
 
         let alerts = self.rule_engine.analyze(&snapshot, self.thresholds);
 
@@ -177,6 +187,7 @@ mod tests {
     use crate::domain::rules::Rule;
     use crate::domain::value_objects::action_risk::ActionRisk;
     use crate::domain::value_objects::severity::Severity;
+    use crate::infrastructure::persistence::in_memory_store::InMemoryStore;
     use async_trait::async_trait;
     use chrono::{DateTime, Utc};
     use std::sync::Mutex;
@@ -349,6 +360,7 @@ mod tests {
         let alert_store = MockAlertStore::new();
         let snapshot_store = MockSnapshotStore::new();
 
+        let baseline_store = InMemoryStore::new();
         let service = MonitorService::new(
             &collector,
             &rule_engine,
@@ -357,6 +369,7 @@ mod tests {
             &notifier,
             &alert_store,
             &snapshot_store,
+            &baseline_store,
             false,
             OperationMode::Observe,
         );
@@ -385,6 +398,7 @@ mod tests {
         let alert_store = MockAlertStore::new();
         let snapshot_store = MockSnapshotStore::new();
 
+        let baseline_store = InMemoryStore::new();
         let service = MonitorService::new(
             &collector,
             &rule_engine,
@@ -393,6 +407,7 @@ mod tests {
             &notifier,
             &alert_store,
             &snapshot_store,
+            &baseline_store,
             false,
             OperationMode::Observe,
         );
@@ -414,6 +429,7 @@ mod tests {
         let alert_store = MockAlertStore::new();
         let snapshot_store = MockSnapshotStore::new();
 
+        let baseline_store = InMemoryStore::new();
         let service = MonitorService::new(
             &collector,
             &rule_engine,
@@ -422,6 +438,7 @@ mod tests {
             &notifier,
             &alert_store,
             &snapshot_store,
+            &baseline_store,
             true,
             OperationMode::Observe,
         );
@@ -536,6 +553,7 @@ mod tests {
         let alert_store = MockAlertStore::new();
         let snapshot_store = MockSnapshotStore::new();
 
+        let baseline_store = InMemoryStore::new();
         let service = MonitorService::new(
             &collector,
             &rule_engine,
@@ -544,6 +562,7 @@ mod tests {
             &notifier,
             &alert_store,
             &snapshot_store,
+            &baseline_store,
             false,
             OperationMode::Observe,
         );
@@ -562,6 +581,7 @@ mod tests {
         let alert_store = MockAlertStore::new();
         let snapshot_store = FailingSnapshotStore;
 
+        let baseline_store = InMemoryStore::new();
         let service = MonitorService::new(
             &collector,
             &rule_engine,
@@ -570,6 +590,7 @@ mod tests {
             &notifier,
             &alert_store,
             &snapshot_store,
+            &baseline_store,
             false,
             OperationMode::Observe,
         );
@@ -590,6 +611,7 @@ mod tests {
         let alert_store = FailingAlertStore;
         let snapshot_store = MockSnapshotStore::new();
 
+        let baseline_store = InMemoryStore::new();
         let service = MonitorService::new(
             &collector,
             &rule_engine,
@@ -598,6 +620,7 @@ mod tests {
             &notifier,
             &alert_store,
             &snapshot_store,
+            &baseline_store,
             false,
             OperationMode::Observe,
         );
@@ -618,6 +641,7 @@ mod tests {
         let alert_store = MockAlertStore::new();
         let snapshot_store = MockSnapshotStore::new();
 
+        let baseline_store = InMemoryStore::new();
         let service = MonitorService::new(
             &collector,
             &rule_engine,
@@ -626,6 +650,7 @@ mod tests {
             &notifier,
             &alert_store,
             &snapshot_store,
+            &baseline_store,
             false,
             OperationMode::Observe,
         );
@@ -646,6 +671,7 @@ mod tests {
         let alert_store = MockAlertStore::new();
         let snapshot_store = MockSnapshotStore::new();
 
+        let baseline_store = InMemoryStore::new();
         let service = MonitorService::new(
             &collector,
             &rule_engine,
@@ -654,6 +680,7 @@ mod tests {
             &notifier,
             &alert_store,
             &snapshot_store,
+            &baseline_store,
             true,
             OperationMode::Observe,
         );
@@ -675,6 +702,7 @@ mod tests {
         let alert_store = MockAlertStore::new();
         let snapshot_store = MockSnapshotStore::new();
 
+        let baseline_store = InMemoryStore::new();
         let service = MonitorService::new(
             &collector,
             &rule_engine,
@@ -683,6 +711,7 @@ mod tests {
             &notifier,
             &alert_store,
             &snapshot_store,
+            &baseline_store,
             true,
             OperationMode::Observe,
         );
@@ -704,6 +733,7 @@ mod tests {
         let alert_store = MockAlertStore::new();
         let snapshot_store = MockSnapshotStore::new();
 
+        let baseline_store = InMemoryStore::new();
         let service = MonitorService::new(
             &collector,
             &rule_engine,
@@ -712,6 +742,7 @@ mod tests {
             &notifier,
             &alert_store,
             &snapshot_store,
+            &baseline_store,
             true, // AI enabled
             OperationMode::Observe,
         );
@@ -732,6 +763,7 @@ mod tests {
         let alert_store = MockAlertStore::new();
         let snapshot_store = MockSnapshotStore::new();
 
+        let baseline_store = InMemoryStore::new();
         let service = MonitorService::new(
             &collector,
             &rule_engine,
@@ -740,6 +772,7 @@ mod tests {
             &notifier,
             &alert_store,
             &snapshot_store,
+            &baseline_store,
             true,
             OperationMode::Observe,
         );
@@ -758,6 +791,7 @@ mod tests {
         let alert_store = MockAlertStore::new();
         let snapshot_store = MockSnapshotStore::new();
 
+        let baseline_store = InMemoryStore::new();
         let service = MonitorService::new(
             &collector,
             &rule_engine,
@@ -766,6 +800,7 @@ mod tests {
             &notifier,
             &alert_store,
             &snapshot_store,
+            &baseline_store,
             false,
             OperationMode::Auto,
         );
@@ -835,6 +870,7 @@ mod tests {
         let alert_store = MockAlertStore::new();
         let snapshot_store = MockSnapshotStore::new();
 
+        let baseline_store = InMemoryStore::new();
         let service = MonitorService::new(
             &collector,
             &rule_engine,
@@ -843,6 +879,7 @@ mod tests {
             &notifier,
             &alert_store,
             &snapshot_store,
+            &baseline_store,
             true,
             OperationMode::Observe,
         );
@@ -864,6 +901,7 @@ mod tests {
         let alert_store = MockAlertStore::new();
         let snapshot_store = MockSnapshotStore::new();
 
+        let baseline_store = InMemoryStore::new();
         let service = MonitorService::new(
             &collector,
             &rule_engine,
@@ -872,6 +910,7 @@ mod tests {
             &notifier,
             &alert_store,
             &snapshot_store,
+            &baseline_store,
             false,
             OperationMode::Observe,
         );
@@ -916,6 +955,7 @@ mod tests {
         let alert_store = MockAlertStore::new();
         let snapshot_store = MockSnapshotStore::new();
 
+        let baseline_store = InMemoryStore::new();
         let service = MonitorService::new(
             &collector,
             &rule_engine,
@@ -924,6 +964,7 @@ mod tests {
             &notifier,
             &alert_store,
             &snapshot_store,
+            &baseline_store,
             false,
             OperationMode::Auto,
         );

@@ -58,12 +58,13 @@ pub async fn run_daemon(service: &MonitorService<'_>, interval_secs: u64) -> any
 mod tests {
     use super::*;
     use crate::domain::entities::alert::Alert;
+    use crate::domain::entities::baseline::Baseline;
     use crate::domain::entities::diagnostic::AiDiagnostic;
     use crate::domain::entities::snapshot::{CpuInfo, MemoryInfo, SystemSnapshot};
     use crate::domain::ports::analyzer::AnalysisError;
     use crate::domain::ports::collector::{CollectionError, SystemCollector};
     use crate::domain::ports::notifier::{NotificationError, Notifier};
-    use crate::domain::ports::store::{AlertStore, SnapshotStore, StoreError};
+    use crate::domain::ports::store::{AlertStore, BaselineStore, SnapshotStore, StoreError};
     use crate::domain::rules::RuleEngine;
     use crate::domain::value_objects::operation_mode::OperationMode;
     use crate::domain::value_objects::thresholds::ThresholdSet;
@@ -162,6 +163,22 @@ mod tests {
         }
     }
 
+    impl BaselineStore for MockStore {
+        fn get_baseline(
+            &self,
+            _metric: &str,
+            _hour_of_day: u8,
+        ) -> Result<Option<Baseline>, StoreError> {
+            Ok(None)
+        }
+        fn save_baseline(&self, _baseline: &Baseline) -> Result<(), StoreError> {
+            Ok(())
+        }
+        fn get_all_baselines(&self) -> Result<Vec<Baseline>, StoreError> {
+            Ok(vec![])
+        }
+    }
+
     struct FailingCollector;
 
     impl SystemCollector for FailingCollector {
@@ -184,6 +201,7 @@ mod tests {
             &thresholds,
             &analyzer,
             &notifier,
+            &MockStore,
             &MockStore,
             &MockStore,
             false,
@@ -211,6 +229,7 @@ mod tests {
             &thresholds,
             &analyzer,
             &notifier,
+            &MockStore,
             &MockStore,
             &MockStore,
             false,
