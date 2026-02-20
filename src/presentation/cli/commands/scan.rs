@@ -1,12 +1,13 @@
 use serde::Serialize;
 
+use crate::application::services::baseline::update_baselines;
 use crate::domain::entities::alert::Alert;
 use crate::domain::entities::diagnostic::AiDiagnostic;
 use crate::domain::entities::snapshot::SystemSnapshot;
 use crate::domain::ports::analyzer::AiAnalyzer;
 use crate::domain::ports::collector::SystemCollector;
 use crate::domain::ports::notifier::Notifier;
-use crate::domain::ports::store::{AlertStore, SnapshotStore};
+use crate::domain::ports::store::{AlertStore, BaselineStore, SnapshotStore};
 use crate::domain::rules::RuleEngine;
 use crate::domain::value_objects::thresholds::ThresholdSet;
 use crate::presentation::cli::formatters::alert_fmt;
@@ -35,12 +36,16 @@ pub async fn run_scan(
     notifier: &dyn Notifier,
     alert_store: &dyn AlertStore,
     snapshot_store: &dyn SnapshotStore,
+    baseline_store: &dyn BaselineStore,
     ai: bool,
     json: bool,
 ) -> anyhow::Result<()> {
     let snapshot = collector.collect()?;
     if let Err(e) = snapshot_store.save_snapshot(&snapshot) {
         tracing::warn!("Échec sauvegarde snapshot : {e}");
+    }
+    if let Err(e) = update_baselines(baseline_store, &snapshot) {
+        tracing::warn!("Échec mise à jour baselines : {e}");
     }
     let alerts = rule_engine.analyze(&snapshot, thresholds);
     for alert in &alerts {
@@ -109,12 +114,13 @@ fn print_scan_human(alerts: &[Alert], diagnostic: Option<&AiDiagnostic>, notifie
 mod tests {
     use super::*;
     use crate::domain::entities::alert::SuggestedAction;
+    use crate::domain::entities::baseline::Baseline;
     use crate::domain::entities::diagnostic::AiDiagnostic;
     use crate::domain::entities::snapshot::{CpuInfo, MemoryInfo, SystemSnapshot};
     use crate::domain::ports::analyzer::AnalysisError;
     use crate::domain::ports::collector::CollectionError;
     use crate::domain::ports::notifier::NotificationError;
-    use crate::domain::ports::store::{AlertStore, SnapshotStore, StoreError};
+    use crate::domain::ports::store::{AlertStore, BaselineStore, SnapshotStore, StoreError};
     use crate::domain::value_objects::action_risk::ActionRisk;
     use crate::domain::value_objects::severity::Severity;
     use async_trait::async_trait;
@@ -260,6 +266,22 @@ mod tests {
         }
     }
 
+    impl BaselineStore for FailingStore {
+        fn get_baseline(
+            &self,
+            _metric: &str,
+            _hour_of_day: u8,
+        ) -> Result<Option<Baseline>, StoreError> {
+            Ok(None)
+        }
+        fn save_baseline(&self, _baseline: &Baseline) -> Result<(), StoreError> {
+            Ok(())
+        }
+        fn get_all_baselines(&self) -> Result<Vec<Baseline>, StoreError> {
+            Ok(vec![])
+        }
+    }
+
     struct FailingAnalyzer;
 
     #[async_trait]
@@ -301,6 +323,22 @@ mod tests {
             &self,
             _since: DateTime<Utc>,
         ) -> Result<Vec<SystemSnapshot>, StoreError> {
+            Ok(vec![])
+        }
+    }
+
+    impl BaselineStore for MockStore {
+        fn get_baseline(
+            &self,
+            _metric: &str,
+            _hour_of_day: u8,
+        ) -> Result<Option<Baseline>, StoreError> {
+            Ok(None)
+        }
+        fn save_baseline(&self, _baseline: &Baseline) -> Result<(), StoreError> {
+            Ok(())
+        }
+        fn get_all_baselines(&self) -> Result<Vec<Baseline>, StoreError> {
             Ok(vec![])
         }
     }
@@ -387,6 +425,7 @@ mod tests {
             &notifier,
             &MockStore,
             &MockStore,
+            &MockStore,
             false,
             false,
         )
@@ -412,6 +451,7 @@ mod tests {
             &notifier,
             &MockStore,
             &MockStore,
+            &MockStore,
             false,
             true,
         )
@@ -433,6 +473,7 @@ mod tests {
             &thresholds,
             &analyzer,
             &notifier,
+            &MockStore,
             &MockStore,
             &MockStore,
             false,
@@ -458,6 +499,7 @@ mod tests {
             &thresholds,
             &analyzer,
             &notifier,
+            &MockStore,
             &MockStore,
             &MockStore,
             false,
@@ -487,6 +529,7 @@ mod tests {
             &notifier,
             &MockStore,
             &MockStore,
+            &MockStore,
             true,
             false,
         )
@@ -512,6 +555,7 @@ mod tests {
             &thresholds,
             &analyzer,
             &notifier,
+            &MockStore,
             &MockStore,
             &MockStore,
             true,
@@ -541,6 +585,7 @@ mod tests {
             &notifier,
             &MockStore,
             &MockStore,
+            &MockStore,
             false,
             true,
         )
@@ -564,6 +609,7 @@ mod tests {
             &thresholds,
             &analyzer,
             &notifier,
+            &MockStore,
             &MockStore,
             &MockStore,
             true,
@@ -591,6 +637,7 @@ mod tests {
             &notifier,
             &MockStore,
             &MockStore,
+            &MockStore,
             false,
             false,
         )
@@ -614,6 +661,7 @@ mod tests {
             &thresholds,
             &analyzer,
             &notifier,
+            &MockStore,
             &MockStore,
             &MockStore,
             true,
@@ -641,6 +689,7 @@ mod tests {
             &notifier,
             &FailingStore,
             &FailingStore,
+            &FailingStore,
             false,
             false,
         )
@@ -664,6 +713,7 @@ mod tests {
             &thresholds,
             &analyzer,
             &notifier,
+            &MockStore,
             &MockStore,
             &MockStore,
             true,

@@ -3,9 +3,10 @@ use std::sync::Mutex;
 use chrono::{DateTime, Utc};
 
 use crate::domain::entities::alert::Alert;
+use crate::domain::entities::baseline::Baseline;
 use crate::domain::entities::snapshot::SystemSnapshot;
 use crate::domain::ports::store::{
-    ActionLogStore, ActionRecord, AlertStore, SnapshotStore, StoreError,
+    ActionLogStore, ActionRecord, AlertStore, BaselineStore, SnapshotStore, StoreError,
 };
 
 /// In-memory store for testing purposes.
@@ -13,6 +14,7 @@ pub struct InMemoryStore {
     alerts: Mutex<Vec<Alert>>,
     snapshots: Mutex<Vec<SystemSnapshot>>,
     action_logs: Mutex<Vec<ActionRecord>>,
+    baselines: Mutex<Vec<Baseline>>,
 }
 
 impl InMemoryStore {
@@ -22,6 +24,7 @@ impl InMemoryStore {
             alerts: Mutex::new(Vec::new()),
             snapshots: Mutex::new(Vec::new()),
             action_logs: Mutex::new(Vec::new()),
+            baselines: Mutex::new(Vec::new()),
         }
     }
 }
@@ -114,6 +117,44 @@ impl SnapshotStore for InMemoryStore {
             .cloned()
             .collect();
         Ok(snapshots)
+    }
+}
+
+impl BaselineStore for InMemoryStore {
+    fn get_baseline(&self, metric: &str, hour_of_day: u8) -> Result<Option<Baseline>, StoreError> {
+        let baselines = self
+            .baselines
+            .lock()
+            .map_err(|e| StoreError::ReadFailed(format!("lock: {e}")))?;
+        Ok(baselines
+            .iter()
+            .find(|b| b.metric == metric && b.hour_of_day == hour_of_day)
+            .cloned())
+    }
+
+    fn save_baseline(&self, baseline: &Baseline) -> Result<(), StoreError> {
+        let mut baselines = self
+            .baselines
+            .lock()
+            .map_err(|e| StoreError::WriteFailed(format!("lock: {e}")))?;
+        if let Some(existing) = baselines
+            .iter_mut()
+            .find(|b| b.metric == baseline.metric && b.hour_of_day == baseline.hour_of_day)
+        {
+            *existing = baseline.clone();
+        } else {
+            baselines.push(baseline.clone());
+        }
+        drop(baselines);
+        Ok(())
+    }
+
+    fn get_all_baselines(&self) -> Result<Vec<Baseline>, StoreError> {
+        Ok(self
+            .baselines
+            .lock()
+            .map_err(|e| StoreError::ReadFailed(format!("lock: {e}")))?
+            .clone())
     }
 }
 
@@ -284,5 +325,77 @@ mod tests {
         let store = InMemoryStore::default();
         let alerts = store.get_alerts().expect("get_alerts");
         assert!(alerts.is_empty());
+    }
+
+    fn make_baseline(metric: &str, hour_of_day: u8) -> Baseline {
+        Baseline {
+            metric: metric.to_string(),
+            hour_of_day,
+            mean: 50.0,
+            stddev: 5.0,
+            sample_count: 100,
+        }
+    }
+
+    #[test]
+    fn get_baseline_returns_none_when_empty() {
+        let store = InMemoryStore::new();
+        let result = store.get_baseline("cpu", 12).expect("get_baseline");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn save_and_get_baseline_round_trip() {
+        let store = InMemoryStore::new();
+        let baseline = make_baseline("cpu", 12);
+        store.save_baseline(&baseline).expect("save_baseline");
+        let found = store.get_baseline("cpu", 12).expect("get_baseline");
+        assert!(found.is_some());
+        let found = found.expect("some");
+        assert_eq!(found.metric, "cpu");
+        assert_eq!(found.hour_of_day, 12);
+        assert!((found.mean - 50.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn save_baseline_updates_existing() {
+        let store = InMemoryStore::new();
+        store
+            .save_baseline(&make_baseline("cpu", 12))
+            .expect("save");
+        let updated = Baseline {
+            metric: "cpu".to_string(),
+            hour_of_day: 12,
+            mean: 75.0,
+            stddev: 8.0,
+            sample_count: 200,
+        };
+        store.save_baseline(&updated).expect("save updated");
+        let all = store.get_all_baselines().expect("get_all_baselines");
+        assert_eq!(all.len(), 1);
+        assert!((all[0].mean - 75.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn get_baseline_matches_by_metric_and_hour() {
+        let store = InMemoryStore::new();
+        store.save_baseline(&make_baseline("cpu", 8)).expect("save");
+        store
+            .save_baseline(&make_baseline("cpu", 14))
+            .expect("save");
+        store.save_baseline(&make_baseline("ram", 8)).expect("save");
+        let found = store.get_baseline("cpu", 14).expect("get_baseline");
+        assert!(found.is_some());
+        assert_eq!(found.expect("some").hour_of_day, 14);
+    }
+
+    #[test]
+    fn get_all_baselines_returns_all() {
+        let store = InMemoryStore::new();
+        store.save_baseline(&make_baseline("cpu", 0)).expect("save");
+        store.save_baseline(&make_baseline("ram", 0)).expect("save");
+        store.save_baseline(&make_baseline("cpu", 6)).expect("save");
+        let all = store.get_all_baselines().expect("get_all_baselines");
+        assert_eq!(all.len(), 3);
     }
 }

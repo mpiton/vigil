@@ -37,7 +37,8 @@ pub fn initialize_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
             metric        TEXT    NOT NULL,
             mean          REAL    NOT NULL,
             stddev        REAL    NOT NULL,
-            sample_count  INTEGER NOT NULL
+            sample_count  INTEGER NOT NULL,
+            UNIQUE (metric, hour_of_day)
         );
 
         CREATE INDEX IF NOT EXISTS idx_snapshots_captured_at ON snapshots(captured_at);

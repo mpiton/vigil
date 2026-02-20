@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use thiserror::Error;
 
 use crate::domain::entities::alert::Alert;
+use crate::domain::entities::baseline::Baseline;
 use crate::domain::entities::snapshot::SystemSnapshot;
 use crate::domain::value_objects::action_risk::ActionRisk;
 
@@ -85,6 +86,29 @@ pub trait ActionLogStore: Send + Sync {
     ///
     /// Returns `StoreError` if the write operation fails.
     fn log_action(&self, record: &ActionRecord) -> Result<(), StoreError>;
+}
+
+pub trait BaselineStore: Send + Sync {
+    /// Retrieve a baseline for a given metric and hour of day.
+    ///
+    /// # Errors
+    ///
+    /// Returns `StoreError` if the read operation fails.
+    fn get_baseline(&self, metric: &str, hour_of_day: u8) -> Result<Option<Baseline>, StoreError>;
+
+    /// Save or update a baseline entry.
+    ///
+    /// # Errors
+    ///
+    /// Returns `StoreError` if the write operation fails.
+    fn save_baseline(&self, baseline: &Baseline) -> Result<(), StoreError>;
+
+    /// Retrieve all stored baselines.
+    ///
+    /// # Errors
+    ///
+    /// Returns `StoreError` if the read operation fails.
+    fn get_all_baselines(&self) -> Result<Vec<Baseline>, StoreError>;
 }
 
 #[cfg(test)]

@@ -5,9 +5,10 @@ use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
 
 use crate::domain::entities::alert::{Alert, SuggestedAction};
+use crate::domain::entities::baseline::Baseline;
 use crate::domain::entities::snapshot::SystemSnapshot;
 use crate::domain::ports::store::{
-    ActionLogStore, ActionRecord, AlertStore, SnapshotStore, StoreError,
+    ActionLogStore, ActionRecord, AlertStore, BaselineStore, SnapshotStore, StoreError,
 };
 use crate::domain::value_objects::severity::Severity;
 
@@ -312,6 +313,99 @@ impl SnapshotStore for SqliteStore {
     }
 }
 
+impl BaselineStore for SqliteStore {
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    fn get_baseline(&self, metric: &str, hour_of_day: u8) -> Result<Option<Baseline>, StoreError> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| StoreError::ReadFailed("lock poisoned".into()))?;
+
+        let result = conn.query_row(
+            "SELECT metric, hour_of_day, mean, stddev, sample_count \
+             FROM baselines WHERE metric = ?1 AND hour_of_day = ?2",
+            params![metric, u32::from(hour_of_day)],
+            |row| {
+                // hour_of_day is 0–23 (fits u8), sample_count is non-negative
+                Ok(Baseline {
+                    metric: row.get(0)?,
+                    hour_of_day: row.get::<_, u32>(1)? as u8,
+                    mean: row.get(2)?,
+                    stddev: row.get(3)?,
+                    sample_count: row.get::<_, i64>(4)? as u64,
+                })
+            },
+        );
+
+        drop(conn);
+
+        match result {
+            Ok(baseline) => Ok(Some(baseline)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(StoreError::ReadFailed(e.to_string())),
+        }
+    }
+
+    fn save_baseline(&self, baseline: &Baseline) -> Result<(), StoreError> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| StoreError::WriteFailed("lock poisoned".into()))?;
+
+        conn.execute(
+            "INSERT INTO baselines (metric, hour_of_day, mean, stddev, sample_count) \
+             VALUES (?1, ?2, ?3, ?4, ?5) \
+             ON CONFLICT(metric, hour_of_day) DO UPDATE SET \
+             mean = excluded.mean, stddev = excluded.stddev, sample_count = excluded.sample_count",
+            params![
+                baseline.metric,
+                u32::from(baseline.hour_of_day),
+                baseline.mean,
+                baseline.stddev,
+                baseline.sample_count,
+            ],
+        )
+        .map_err(|e| StoreError::WriteFailed(e.to_string()))?;
+
+        drop(conn);
+        Ok(())
+    }
+
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    fn get_all_baselines(&self) -> Result<Vec<Baseline>, StoreError> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|_| StoreError::ReadFailed("lock poisoned".into()))?;
+
+        let mut stmt = conn
+            .prepare(
+                "SELECT metric, hour_of_day, mean, stddev, sample_count \
+                 FROM baselines ORDER BY metric, hour_of_day",
+            )
+            .map_err(|e| StoreError::ReadFailed(e.to_string()))?;
+
+        let baselines = stmt
+            .query_map([], |row| {
+                // hour_of_day is 0–23 (fits u8), sample_count is non-negative
+                Ok(Baseline {
+                    metric: row.get(0)?,
+                    hour_of_day: row.get::<_, u32>(1)? as u8,
+                    mean: row.get(2)?,
+                    stddev: row.get(3)?,
+                    sample_count: row.get::<_, i64>(4)? as u64,
+                })
+            })
+            .map_err(|e| StoreError::ReadFailed(e.to_string()))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| StoreError::ReadFailed(e.to_string()))?;
+
+        drop(stmt);
+        drop(conn);
+        Ok(baselines)
+    }
+}
+
 impl ActionLogStore for SqliteStore {
     fn log_action(&self, record: &ActionRecord) -> Result<(), StoreError> {
         let risk_str = serde_json::to_string(&record.risk)
@@ -341,8 +435,9 @@ impl ActionLogStore for SqliteStore {
 #[allow(clippy::expect_used)]
 mod tests {
     use super::*;
+    use crate::domain::entities::baseline::Baseline;
     use crate::domain::entities::snapshot::{CpuInfo, MemoryInfo};
-    use crate::domain::ports::store::{ActionLogStore, ActionRecord};
+    use crate::domain::ports::store::{ActionLogStore, ActionRecord, BaselineStore};
     use crate::domain::value_objects::action_risk::ActionRisk;
 
     fn make_alert(severity: Severity) -> Alert {
@@ -583,6 +678,85 @@ mod tests {
             .get_snapshots_since(Utc::now())
             .expect("get_snapshots_since");
         assert!(recent.is_empty());
+    }
+
+    fn make_baseline(metric: &str, hour_of_day: u8) -> Baseline {
+        Baseline {
+            metric: metric.into(),
+            hour_of_day,
+            mean: 42.0,
+            stddev: 5.0,
+            sample_count: 100,
+        }
+    }
+
+    #[test]
+    fn get_baseline_returns_none_when_absent() {
+        let (store, _dir) = make_store();
+        let result = store.get_baseline("cpu", 12).expect("get_baseline");
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn save_and_get_baseline_round_trip() {
+        let (store, _dir) = make_store();
+        let baseline = make_baseline("cpu", 12);
+
+        assert!(store.save_baseline(&baseline).is_ok());
+
+        let retrieved = store.get_baseline("cpu", 12).expect("get_baseline");
+        assert!(retrieved.is_some());
+        let b = retrieved.expect("some baseline");
+        assert_eq!(b.metric, "cpu");
+        assert_eq!(b.hour_of_day, 12);
+        assert!((b.mean - 42.0).abs() < f64::EPSILON);
+        assert!((b.stddev - 5.0).abs() < f64::EPSILON);
+        assert_eq!(b.sample_count, 100);
+    }
+
+    #[test]
+    fn save_baseline_updates_existing_row() {
+        let (store, _dir) = make_store();
+        let baseline = make_baseline("ram", 8);
+        assert!(store.save_baseline(&baseline).is_ok());
+
+        let updated = Baseline {
+            metric: "ram".into(),
+            hour_of_day: 8,
+            mean: 75.0,
+            stddev: 3.0,
+            sample_count: 200,
+        };
+        assert!(store.save_baseline(&updated).is_ok());
+
+        let all = store.get_all_baselines().expect("get_all_baselines");
+        assert_eq!(all.len(), 1);
+        assert!((all[0].mean - 75.0).abs() < f64::EPSILON);
+        assert_eq!(all[0].sample_count, 200);
+    }
+
+    #[test]
+    fn get_all_baselines_ordered_by_metric_then_hour() {
+        let (store, _dir) = make_store();
+
+        assert!(store.save_baseline(&make_baseline("ram", 10)).is_ok());
+        assert!(store.save_baseline(&make_baseline("cpu", 20)).is_ok());
+        assert!(store.save_baseline(&make_baseline("cpu", 5)).is_ok());
+
+        let all = store.get_all_baselines().expect("get_all_baselines");
+        assert_eq!(all.len(), 3);
+        assert_eq!(all[0].metric, "cpu");
+        assert_eq!(all[0].hour_of_day, 5);
+        assert_eq!(all[1].metric, "cpu");
+        assert_eq!(all[1].hour_of_day, 20);
+        assert_eq!(all[2].metric, "ram");
+    }
+
+    #[test]
+    fn get_all_baselines_returns_empty_when_none() {
+        let (store, _dir) = make_store();
+        let all = store.get_all_baselines().expect("get_all_baselines");
+        assert!(all.is_empty());
     }
 
     #[test]

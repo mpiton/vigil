@@ -93,6 +93,7 @@ async fn main() -> anyhow::Result<()> {
                 &notifier,
                 &store,
                 &store,
+                &store,
                 ai,
                 json,
             )
@@ -111,6 +112,7 @@ async fn main() -> anyhow::Result<()> {
                 &thresholds,
                 &*analyzer,
                 &notifier,
+                &store,
                 &store,
                 &store,
                 config.ai.enabled,
