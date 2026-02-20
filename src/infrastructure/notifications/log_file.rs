@@ -1,7 +1,9 @@
 use std::io::Write;
 use std::path::PathBuf;
 
-use crate::domain::entities::alert::Alert;
+use chrono::Utc;
+
+use crate::domain::entities::alert::{Alert, SuggestedAction};
 use crate::domain::entities::diagnostic::AiDiagnostic;
 use crate::domain::ports::notifier::{NotificationError, Notifier};
 
@@ -75,6 +77,24 @@ impl Notifier for LogFileNotifier {
         self.append_json_line(&entry)
     }
 
+    fn notify_action_executed(
+        &self,
+        action: &SuggestedAction,
+        success: bool,
+        output: &str,
+    ) -> Result<(), NotificationError> {
+        let entry = serde_json::json!({
+            "timestamp": Utc::now().to_rfc3339(),
+            "type": "action_executed",
+            "description": action.description,
+            "command": action.command,
+            "risk": format!("{}", action.risk),
+            "success": success,
+            "output": output,
+        });
+        self.append_json_line(&entry)
+    }
+
     fn notify_ai_diagnostic(&self, diagnostic: &AiDiagnostic) -> Result<(), NotificationError> {
         let entry = serde_json::json!({
             "timestamp": diagnostic.timestamp.to_rfc3339(),
@@ -124,6 +144,7 @@ mod tests {
             details: "Details du diagnostic".to_string(),
             severity: Severity::Medium,
             confidence: 0.85,
+            suggested_actions: vec![],
         }
     }
 

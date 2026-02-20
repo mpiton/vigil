@@ -287,6 +287,7 @@ fn to_diagnostic(raw: RawDiagnostic) -> AiDiagnostic {
         details: raw.details,
         severity: raw.severity,
         confidence: raw.confidence.clamp(0.0, 1.0),
+        suggested_actions: vec![],
     }
 }
 

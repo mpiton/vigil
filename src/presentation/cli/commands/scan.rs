@@ -183,6 +183,15 @@ mod tests {
             Ok(())
         }
 
+        fn notify_action_executed(
+            &self,
+            _action: &SuggestedAction,
+            _success: bool,
+            _output: &str,
+        ) -> Result<(), NotificationError> {
+            Ok(())
+        }
+
         fn notify_ai_diagnostic(
             &self,
             _diagnostic: &AiDiagnostic,
@@ -211,6 +220,15 @@ mod tests {
             Ok(())
         }
 
+        fn notify_action_executed(
+            &self,
+            _action: &SuggestedAction,
+            _success: bool,
+            _output: &str,
+        ) -> Result<(), NotificationError> {
+            Ok(())
+        }
+
         fn notify_ai_diagnostic(
             &self,
             _diagnostic: &AiDiagnostic,
@@ -224,6 +242,14 @@ mod tests {
 
     impl Notifier for FailingNotifier {
         fn notify(&self, _alert: &Alert) -> Result<(), NotificationError> {
+            Err(NotificationError::SendFailed("dbus down".into()))
+        }
+        fn notify_action_executed(
+            &self,
+            _action: &SuggestedAction,
+            _success: bool,
+            _output: &str,
+        ) -> Result<(), NotificationError> {
             Err(NotificationError::SendFailed("dbus down".into()))
         }
         fn notify_ai_diagnostic(
@@ -391,6 +417,7 @@ mod tests {
             details: "Process X consumes 95% RAM".to_string(),
             severity: Severity::High,
             confidence: 0.87,
+            suggested_actions: vec![],
         }
     }
 

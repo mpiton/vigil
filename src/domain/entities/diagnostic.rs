@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use crate::domain::entities::alert::SuggestedAction;
 use crate::domain::value_objects::severity::Severity;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -10,6 +11,8 @@ pub struct AiDiagnostic {
     pub details: String,
     pub severity: Severity,
     pub confidence: f64,
+    #[serde(default)]
+    pub suggested_actions: Vec<SuggestedAction>,
 }
 
 #[cfg(test)]
@@ -26,6 +29,7 @@ mod tests {
             details: "RAM usage at 92%, swap at 45%".to_string(),
             severity: Severity::High,
             confidence: 0.87,
+            suggested_actions: vec![],
         };
 
         let json = serde_json::to_string(&diagnostic).expect("serialize");

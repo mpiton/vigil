@@ -1,6 +1,6 @@
 use notify_rust::{Notification, Timeout, Urgency};
 
-use crate::domain::entities::alert::Alert;
+use crate::domain::entities::alert::{Alert, SuggestedAction};
 use crate::domain::entities::diagnostic::AiDiagnostic;
 use crate::domain::ports::notifier::{NotificationError, Notifier};
 use crate::domain::value_objects::severity::Severity;
@@ -45,6 +45,24 @@ impl Notifier for DesktopNotifier {
 
         let body = escape_markup(&truncate(&raw_body, MAX_BODY_CHARS));
 
+        send_notification(&summary, &body, urgency)
+    }
+
+    fn notify_action_executed(
+        &self,
+        action: &SuggestedAction,
+        success: bool,
+        _output: &str,
+    ) -> Result<(), NotificationError> {
+        let status = if success { "\u{2713}" } else { "\u{2717}" };
+        let raw_summary = format!("\u{26a1} Vigil \u{2014} Action {status}");
+        let summary = escape_markup(&truncate(&raw_summary, MAX_SUMMARY_CHARS));
+        let body = escape_markup(&truncate(&action.description, MAX_BODY_CHARS));
+        let urgency = if success {
+            Urgency::Low
+        } else {
+            Urgency::Normal
+        };
         send_notification(&summary, &body, urgency)
     }
 
@@ -140,6 +158,7 @@ mod tests {
             details: "Process X is consuming 95% of RAM".to_string(),
             severity: Severity::High,
             confidence: 0.87,
+            suggested_actions: vec![],
         }
     }
 

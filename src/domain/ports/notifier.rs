@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::domain::entities::alert::Alert;
+use crate::domain::entities::alert::{Alert, SuggestedAction};
 use crate::domain::entities::diagnostic::AiDiagnostic;
 
 #[derive(Error, Debug)]
@@ -27,6 +27,19 @@ pub trait Notifier: Send + Sync {
     /// Returns `NotificationError` if the notification fails to send
     /// or the channel is unavailable.
     fn notify_ai_diagnostic(&self, diagnostic: &AiDiagnostic) -> Result<(), NotificationError>;
+
+    /// Send a notification for an auto-executed remediation action.
+    ///
+    /// # Errors
+    ///
+    /// Returns `NotificationError` if the notification fails to send
+    /// or the channel is unavailable.
+    fn notify_action_executed(
+        &self,
+        action: &SuggestedAction,
+        success: bool,
+        output: &str,
+    ) -> Result<(), NotificationError>;
 }
 
 #[cfg(test)]
