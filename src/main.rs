@@ -22,6 +22,7 @@ use vigil::presentation::cli::commands::kill::run_kill;
 use vigil::presentation::cli::commands::report::run_report;
 use vigil::presentation::cli::commands::scan::run_scan;
 use vigil::presentation::cli::commands::status::run_status;
+use vigil::presentation::tui::app::run_tui;
 
 fn print_banner() {
     println!("{}", "━".repeat(40).cyan());
@@ -36,6 +37,14 @@ fn setup_tracing(verbose: bool) {
         EnvFilter::new("info")
     };
     tracing_subscriber::fmt().with_env_filter(filter).init();
+}
+
+fn open_store(config: &AppConfig) -> anyhow::Result<SqliteStore> {
+    let store = SqliteStore::new(&config.database.path)?;
+    if let Err(e) = store.cleanup_old(config.database.retention_hours) {
+        tracing::warn!("Échec nettoyage anciennes données : {e}");
+    }
+    Ok(store)
 }
 
 fn resolve_mode(
@@ -100,10 +109,7 @@ async fn main() -> anyhow::Result<()> {
             run_status(&collector, json)?;
         }
         Some(Commands::Scan { ai, json }) => {
-            let store = SqliteStore::new(&config.database.path)?;
-            if let Err(e) = store.cleanup_old(config.database.retention_hours) {
-                tracing::warn!("Échec nettoyage anciennes données : {e}");
-            }
+            let store = open_store(&config)?;
             tokio::time::sleep(Duration::from_millis(500)).await;
             run_scan(
                 &collector,
@@ -120,10 +126,7 @@ async fn main() -> anyhow::Result<()> {
             .await?;
         }
         Some(Commands::Daemon { .. }) | None => {
-            let store = SqliteStore::new(&config.database.path)?;
-            if let Err(e) = store.cleanup_old(config.database.retention_hours) {
-                tracing::warn!("Échec nettoyage anciennes données : {e}");
-            }
+            let store = open_store(&config)?;
             print_banner();
             tracing::info!("Mode : {effective_mode}");
             let service = MonitorService::new(
@@ -143,10 +146,7 @@ async fn main() -> anyhow::Result<()> {
             run_daemon(&service, config.general.interval_secs).await?;
         }
         Some(Commands::Report { hours, json }) => {
-            let store = SqliteStore::new(&config.database.path)?;
-            if let Err(e) = store.cleanup_old(config.database.retention_hours) {
-                tracing::warn!("Échec nettoyage anciennes données : {e}");
-            }
+            let store = open_store(&config)?;
             run_report(&store, &store, hours, json)?;
         }
         Some(Commands::Explain { pid }) => {
@@ -165,6 +165,11 @@ async fn main() -> anyhow::Result<()> {
                 pid,
                 force,
             )?;
+        }
+        Some(Commands::Watch { interval }) => {
+            let store = open_store(&config)?;
+            let interval_secs = interval.unwrap_or(config.general.interval_secs);
+            run_tui(&collector, &store, &thresholds, interval_secs)?;
         }
         Some(Commands::Config { .. }) => {
             eprintln!("Commande config pas encore implémentée");

@@ -83,6 +83,14 @@ pub enum Commands {
         force: bool,
     },
 
+    /// Lancer le tableau de bord interactif
+    #[command(alias = "w")]
+    Watch {
+        /// Intervalle de rafraîchissement en secondes (défaut : config)
+        #[arg(short, long)]
+        interval: Option<u64>,
+    },
+
     /// Manage configuration
     #[command(alias = "c")]
     Config {
@@ -255,5 +263,30 @@ mod tests {
     fn parse_report_alias() {
         let cli = Cli::try_parse_from(["vigil", "r"]).unwrap_or_else(|e| panic!("{e}"));
         assert!(matches!(cli.command, Some(Commands::Report { .. })));
+    }
+
+    #[test]
+    fn parse_watch_command() {
+        let cli = Cli::try_parse_from(["vigil", "watch"]).unwrap_or_else(|e| panic!("{e}"));
+        assert!(matches!(
+            cli.command,
+            Some(Commands::Watch { interval: None })
+        ));
+    }
+
+    #[test]
+    fn parse_watch_with_interval() {
+        let cli = Cli::try_parse_from(["vigil", "watch", "--interval", "5"])
+            .unwrap_or_else(|e| panic!("{e}"));
+        assert!(matches!(
+            cli.command,
+            Some(Commands::Watch { interval: Some(5) })
+        ));
+    }
+
+    #[test]
+    fn parse_watch_alias() {
+        let cli = Cli::try_parse_from(["vigil", "w"]).unwrap_or_else(|e| panic!("{e}"));
+        assert!(matches!(cli.command, Some(Commands::Watch { .. })));
     }
 }
