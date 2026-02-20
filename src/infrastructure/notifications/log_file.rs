@@ -1,7 +1,9 @@
 use std::io::Write;
 use std::path::PathBuf;
 
-use crate::domain::entities::alert::Alert;
+use chrono::Utc;
+
+use crate::domain::entities::alert::{Alert, SuggestedAction};
 use crate::domain::entities::diagnostic::AiDiagnostic;
 use crate::domain::ports::notifier::{NotificationError, Notifier};
 
@@ -75,6 +77,24 @@ impl Notifier for LogFileNotifier {
         self.append_json_line(&entry)
     }
 
+    fn notify_action_executed(
+        &self,
+        action: &SuggestedAction,
+        success: bool,
+        output: &str,
+    ) -> Result<(), NotificationError> {
+        let entry = serde_json::json!({
+            "timestamp": Utc::now().to_rfc3339(),
+            "type": "action_executed",
+            "description": action.description,
+            "command": action.command,
+            "risk": format!("{}", action.risk),
+            "success": success,
+            "output": output,
+        });
+        self.append_json_line(&entry)
+    }
+
     fn notify_ai_diagnostic(&self, diagnostic: &AiDiagnostic) -> Result<(), NotificationError> {
         let entry = serde_json::json!({
             "timestamp": diagnostic.timestamp.to_rfc3339(),
@@ -124,6 +144,7 @@ mod tests {
             details: "Details du diagnostic".to_string(),
             severity: Severity::Medium,
             confidence: 0.85,
+            suggested_actions: vec![],
         }
     }
 
@@ -292,6 +313,50 @@ mod tests {
 
         let actions = parsed["actions"].as_array().expect("actions array");
         assert!(actions.is_empty());
+    }
+
+    #[test]
+    fn notify_action_executed_writes_json_line() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let log_path = dir.path().join("vigil.log");
+        let notifier = LogFileNotifier {
+            path: log_path.clone(),
+        };
+
+        let action = make_action(ActionRisk::Safe);
+        let result = notifier.notify_action_executed(&action, true, "done");
+        assert!(result.is_ok());
+
+        let content = std::fs::read_to_string(&log_path).expect("read log");
+        let parsed: serde_json::Value = serde_json::from_str(content.trim()).expect("parse JSON");
+
+        assert_eq!(parsed["type"], "action_executed");
+        assert_eq!(parsed["description"], "Action de test");
+        assert_eq!(parsed["command"], "echo test");
+        assert_eq!(parsed["risk"], "safe");
+        assert!(parsed["success"].as_bool().expect("success bool"));
+        assert_eq!(parsed["output"], "done");
+        assert!(parsed["timestamp"].is_string());
+    }
+
+    #[test]
+    fn notify_action_executed_failure_case() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let log_path = dir.path().join("vigil.log");
+        let notifier = LogFileNotifier {
+            path: log_path.clone(),
+        };
+
+        let action = make_action(ActionRisk::Moderate);
+        let result = notifier.notify_action_executed(&action, false, "error output");
+        assert!(result.is_ok());
+
+        let content = std::fs::read_to_string(&log_path).expect("read log");
+        let parsed: serde_json::Value = serde_json::from_str(content.trim()).expect("parse JSON");
+
+        assert_eq!(parsed["risk"], "moderate");
+        assert!(!parsed["success"].as_bool().expect("success bool"));
+        assert_eq!(parsed["output"], "error output");
     }
 
     #[test]

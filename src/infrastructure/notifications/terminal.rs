@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use colored::Colorize;
 
-use crate::domain::entities::alert::Alert;
+use crate::domain::entities::alert::{Alert, SuggestedAction};
 use crate::domain::entities::diagnostic::AiDiagnostic;
 use crate::domain::ports::notifier::{NotificationError, Notifier};
 use crate::domain::value_objects::action_risk::ActionRisk;
@@ -62,6 +62,33 @@ impl Notifier for TerminalNotifier {
         }
 
         println!("{}\n", separator.dimmed());
+        Ok(())
+    }
+
+    fn notify_action_executed(
+        &self,
+        action: &SuggestedAction,
+        success: bool,
+        output: &str,
+    ) -> Result<(), NotificationError> {
+        let status = if success {
+            "\u{2713} R\u{00e9}ussi".green().bold().to_string()
+        } else {
+            "\u{2717} \u{00c9}chou\u{00e9}".red().bold().to_string()
+        };
+        let risk = risk_badge(action.risk);
+        println!(
+            "  \u{26a1} {} {} \u{2014} {} \u{2192} {}",
+            risk,
+            sanitize(&action.description),
+            sanitize(&action.command).dimmed(),
+            status
+        );
+        if !output.is_empty() {
+            for line in output.lines().take(5) {
+                println!("    {}", sanitize(line).dimmed());
+            }
+        }
         Ok(())
     }
 
@@ -188,6 +215,7 @@ mod tests {
             details: "Process X is consuming 95% of RAM".to_string(),
             severity: Severity::High,
             confidence: 0.87,
+            suggested_actions: vec![],
         }
     }
 
@@ -323,6 +351,32 @@ mod tests {
             let badge = risk_badge(risk);
             assert!(!badge.is_empty(), "badge for {risk} should not be empty");
         }
+    }
+
+    #[test]
+    fn notify_action_executed_success() {
+        disable_colors();
+        let notifier = TerminalNotifier::new(OperationMode::Auto);
+        let action = make_action(ActionRisk::Safe);
+        assert!(notifier.notify_action_executed(&action, true, "ok").is_ok());
+    }
+
+    #[test]
+    fn notify_action_executed_failure() {
+        disable_colors();
+        let notifier = TerminalNotifier::new(OperationMode::Auto);
+        let action = make_action(ActionRisk::Dangerous);
+        assert!(notifier
+            .notify_action_executed(&action, false, "error\nline2\nline3\nline4\nline5\nline6")
+            .is_ok());
+    }
+
+    #[test]
+    fn notify_action_executed_empty_output() {
+        disable_colors();
+        let notifier = TerminalNotifier::new(OperationMode::Observe);
+        let action = make_action(ActionRisk::Moderate);
+        assert!(notifier.notify_action_executed(&action, true, "").is_ok());
     }
 
     #[test]

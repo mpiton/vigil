@@ -57,7 +57,7 @@ pub async fn run_daemon(service: &MonitorService<'_>, interval_secs: u64) -> any
 #[allow(clippy::expect_used)]
 mod tests {
     use super::*;
-    use crate::domain::entities::alert::Alert;
+    use crate::domain::entities::alert::{Alert, SuggestedAction};
     use crate::domain::entities::baseline::Baseline;
     use crate::domain::entities::diagnostic::AiDiagnostic;
     use crate::domain::entities::snapshot::{CpuInfo, MemoryInfo, SystemSnapshot};
@@ -68,6 +68,7 @@ mod tests {
     use crate::domain::rules::RuleEngine;
     use crate::domain::value_objects::operation_mode::OperationMode;
     use crate::domain::value_objects::thresholds::ThresholdSet;
+    use crate::infrastructure::persistence::in_memory_store::InMemoryStore;
     use async_trait::async_trait;
     use chrono::Utc;
 
@@ -118,6 +119,14 @@ mod tests {
 
     impl Notifier for MockNotifier {
         fn notify(&self, _alert: &Alert) -> Result<(), NotificationError> {
+            Ok(())
+        }
+        fn notify_action_executed(
+            &self,
+            _action: &SuggestedAction,
+            _success: bool,
+            _output: &str,
+        ) -> Result<(), NotificationError> {
             Ok(())
         }
         fn notify_ai_diagnostic(
@@ -195,6 +204,8 @@ mod tests {
         let analyzer = MockAnalyzer;
         let notifier = MockNotifier;
 
+        let action_log_store = InMemoryStore::new();
+        let protected: Vec<String> = vec![];
         let service = MonitorService::new(
             &collector,
             &rule_engine,
@@ -204,6 +215,8 @@ mod tests {
             &MockStore,
             &MockStore,
             &MockStore,
+            &action_log_store,
+            &protected,
             false,
             OperationMode::Observe,
         );
@@ -223,6 +236,8 @@ mod tests {
         let analyzer = MockAnalyzer;
         let notifier = MockNotifier;
 
+        let action_log_store = InMemoryStore::new();
+        let protected: Vec<String> = vec![];
         let service = MonitorService::new(
             &collector,
             &rule_engine,
@@ -232,6 +247,8 @@ mod tests {
             &MockStore,
             &MockStore,
             &MockStore,
+            &action_log_store,
+            &protected,
             false,
             OperationMode::Observe,
         );

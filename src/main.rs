@@ -122,6 +122,8 @@ async fn main() -> anyhow::Result<()> {
                 &store,
                 &store,
                 &store,
+                &store,
+                &config.allowlist.protected_commands,
                 config.ai.enabled,
                 effective_mode,
             );
