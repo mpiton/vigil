@@ -193,6 +193,7 @@ impl<'a> MonitorService<'a> {
             tokio::process::Command::new("sh")
                 .arg("-c")
                 .arg(&action.command)
+                .kill_on_drop(true)
                 .output(),
         )
         .await
@@ -245,7 +246,7 @@ impl<'a> MonitorService<'a> {
 /// redirections (`>`, `<`), or glob/variable expansion (`$`, `*`, `?`) are blocked.
 fn contains_shell_metacharacters(command: &str) -> bool {
     const FORBIDDEN: &[&str] = &[
-        ";", "&&", "||", "|", "`", "$(", "${", ">", "<", "\n", "\r", "*", "?",
+        ";", "&&", "||", "|", "`", "$(", "${", ">", "<", "\n", "\r", "*", "?", "&",
     ];
     // Also block bare `$` followed by a letter (variable expansion)
     if command.bytes().enumerate().any(|(i, b)| {
@@ -1417,6 +1418,12 @@ mod tests {
         assert!(contains_shell_metacharacters("echo `id`"));
         assert!(contains_shell_metacharacters("cat > /etc/passwd"));
         assert!(contains_shell_metacharacters("cat < /etc/shadow"));
+    }
+
+    #[test]
+    fn metacharacters_blocks_background_operator() {
+        assert!(contains_shell_metacharacters("cmd1 & cmd2"));
+        assert!(contains_shell_metacharacters("sleep 999 &"));
     }
 
     #[test]
