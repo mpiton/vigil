@@ -3,6 +3,7 @@ use thiserror::Error;
 
 use crate::domain::entities::alert::Alert;
 use crate::domain::entities::diagnostic::AiDiagnostic;
+use crate::domain::entities::process::ProcessInfo;
 use crate::domain::entities::snapshot::SystemSnapshot;
 
 #[derive(Error, Debug)]
@@ -31,6 +32,20 @@ pub trait AiAnalyzer: Send + Sync {
         snapshot: &SystemSnapshot,
         alerts: &[Alert],
     ) -> Result<Option<AiDiagnostic>, AnalysisError>;
+
+    /// Explain a specific process behavior using AI.
+    ///
+    /// # Errors
+    ///
+    /// Returns `AnalysisError` if the AI service is unavailable,
+    /// the response is invalid, the request is rate-limited, or
+    /// the analysis times out.
+    async fn explain_process(
+        &self,
+        _process: &ProcessInfo,
+    ) -> Result<Option<String>, AnalysisError> {
+        Ok(None)
+    }
 }
 
 #[cfg(test)]
