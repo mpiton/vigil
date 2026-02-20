@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use serde::Deserialize;
 
+use crate::domain::entities::process::ProcessInfo;
 use crate::domain::entities::{AiDiagnostic, Alert, SystemSnapshot};
 use crate::domain::ports::{AiAnalyzer, AnalysisError};
 use crate::domain::value_objects::Severity;
@@ -52,21 +53,9 @@ impl ClaudeCliAnalyzer {
         drop(guard);
         Ok(allowed)
     }
-}
 
-#[async_trait]
-impl AiAnalyzer for ClaudeCliAnalyzer {
-    async fn analyze(
-        &self,
-        snapshot: &SystemSnapshot,
-        alerts: &[Alert],
-    ) -> Result<Option<AiDiagnostic>, AnalysisError> {
-        if !self.try_claim()? {
-            return Ok(None);
-        }
-
-        let prompt = PromptBuilder::build(snapshot, alerts);
-
+    /// Run the claude CLI with the given prompt and return raw stdout bytes.
+    async fn run_claude_cli(&self, prompt: &str) -> Result<Vec<u8>, AnalysisError> {
         let output = tokio::time::timeout(
             Duration::from_secs(self.timeout_secs),
             tokio::process::Command::new("claude")
@@ -77,7 +66,7 @@ impl AiAnalyzer for ClaudeCliAnalyzer {
                     "--model",
                     &self.model,
                     "--",
-                    &prompt,
+                    prompt,
                 ])
                 .kill_on_drop(true)
                 .output(),
@@ -103,7 +92,76 @@ impl AiAnalyzer for ClaudeCliAnalyzer {
             )));
         }
 
-        parse_response(&output.stdout).map(Some)
+        if output.stdout.is_empty() {
+            return Err(AnalysisError::InvalidResponse(
+                "empty response from claude".into(),
+            ));
+        }
+
+        Ok(output.stdout)
+    }
+}
+
+#[async_trait]
+impl AiAnalyzer for ClaudeCliAnalyzer {
+    async fn analyze(
+        &self,
+        snapshot: &SystemSnapshot,
+        alerts: &[Alert],
+    ) -> Result<Option<AiDiagnostic>, AnalysisError> {
+        if !self.try_claim()? {
+            return Ok(None);
+        }
+
+        let prompt = PromptBuilder::build(snapshot, alerts);
+        let stdout = self.run_claude_cli(&prompt).await?;
+
+        parse_response(&stdout).map(Some)
+    }
+
+    async fn explain_process(
+        &self,
+        process: &ProcessInfo,
+    ) -> Result<Option<String>, AnalysisError> {
+        if !self.try_claim()? {
+            return Ok(None);
+        }
+
+        let prompt = format!(
+            "Explique le comportement de ce processus Linux :\n\
+            - Nom : {name}\n\
+            - Ligne de commande : {cmdline}\n\
+            - État : {state}\n\
+            - Mémoire RSS : {rss_mb} MB\n\
+            - Mémoire virtuelle : {vms_mb} MB\n\
+            - CPU : {cpu_percent}%\n\
+            - PID parent : {ppid}\n\
+            - Descripteurs de fichiers ouverts : {open_fds}\n\
+            - Utilisateur : {user}\n\
+            \n\
+            Explique en français :\n\
+            1. À quoi sert ce processus\n\
+            2. Si son comportement est normal\n\
+            3. Si sa consommation de ressources est attendue",
+            name = process.name,
+            cmdline = process.cmdline,
+            state = process.state,
+            rss_mb = process.rss_mb,
+            vms_mb = process.vms_mb,
+            cpu_percent = process.cpu_percent,
+            ppid = process.ppid,
+            open_fds = process.open_fds,
+            user = process.user,
+        );
+
+        let stdout = self.run_claude_cli(&prompt).await?;
+
+        let text = std::str::from_utf8(&stdout)
+            .map_err(|e| AnalysisError::InvalidResponse(format!("invalid UTF-8: {e}")))?;
+
+        let result_text = extract_result(text)?;
+
+        Ok(Some(result_text))
     }
 }
 
@@ -121,6 +179,18 @@ struct RawDiagnostic {
     details: String,
     severity: Severity,
     confidence: f64,
+}
+
+/// Truncate a string to at most `max_bytes` without splitting a UTF-8 codepoint.
+fn truncate_str(s: &str, max_bytes: usize) -> &str {
+    if s.len() <= max_bytes {
+        return s;
+    }
+    let mut end = max_bytes;
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    &s[..end]
 }
 
 fn parse_response(stdout: &[u8]) -> Result<AiDiagnostic, AnalysisError> {
@@ -141,14 +211,14 @@ fn parse_response(stdout: &[u8]) -> Result<AiDiagnostic, AnalysisError> {
     let result_text = extract_result(text)?;
 
     tracing::debug!(
-        result_preview = &result_text[..result_text.len().min(500)],
+        result_preview = truncate_str(&result_text, 500),
         "extracted result text"
     );
 
     let raw: RawDiagnostic = serde_json::from_str(&result_text).map_err(|e| {
         AnalysisError::InvalidResponse(format!(
             "failed to parse diagnostic: {e} — raw: {}",
-            &result_text[..result_text.len().min(200)]
+            truncate_str(&result_text, 200)
         ))
     })?;
 
@@ -352,5 +422,49 @@ mod tests {
         let json = br#"{"summary":"s","details":"d","severity":"Low","confidence":1.5}"#;
         let diag = parse_response(json).expect("should parse");
         assert!((diag.confidence - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn truncate_str_short_string_unchanged() {
+        assert_eq!(truncate_str("hello", 10), "hello");
+    }
+
+    #[test]
+    fn truncate_str_exact_boundary() {
+        assert_eq!(truncate_str("hello", 5), "hello");
+    }
+
+    #[test]
+    fn truncate_str_cuts_at_limit() {
+        assert_eq!(truncate_str("hello world", 5), "hello");
+    }
+
+    #[test]
+    fn truncate_str_respects_utf8_boundary() {
+        // 'é' is 2 bytes in UTF-8: if we cut at byte 1, we must back up to 0
+        let s = "é";
+        assert_eq!(s.len(), 2);
+        assert_eq!(truncate_str(s, 1), "");
+    }
+
+    #[test]
+    fn truncate_str_multibyte_preserves_complete_chars() {
+        // "café" = 'c'(1) + 'a'(1) + 'f'(1) + 'é'(2) = 5 bytes
+        let s = "café";
+        assert_eq!(s.len(), 5);
+        // Cutting at 4 bytes would split 'é', so back up to 3
+        assert_eq!(truncate_str(s, 4), "caf");
+        // Cutting at 5 keeps everything
+        assert_eq!(truncate_str(s, 5), "café");
+    }
+
+    #[test]
+    fn truncate_str_empty_string() {
+        assert_eq!(truncate_str("", 10), "");
+    }
+
+    #[test]
+    fn truncate_str_zero_limit() {
+        assert_eq!(truncate_str("hello", 0), "");
     }
 }
