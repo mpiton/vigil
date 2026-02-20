@@ -126,6 +126,14 @@ mod tests {
         ) -> Result<(), NotificationError> {
             Ok(())
         }
+        fn notify_action_executed(
+            &self,
+            _action: &crate::domain::entities::alert::SuggestedAction,
+            _success: bool,
+            _output: &str,
+        ) -> Result<(), NotificationError> {
+            Ok(())
+        }
     }
 
     struct MockStore;
@@ -206,6 +214,8 @@ mod tests {
             &MockStore,
             false,
             OperationMode::Observe,
+            None,
+            &[],
         );
 
         let result =
@@ -234,6 +244,8 @@ mod tests {
             &MockStore,
             false,
             OperationMode::Observe,
+            None,
+            &[],
         );
 
         let result =

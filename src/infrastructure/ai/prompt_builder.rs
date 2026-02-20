@@ -97,7 +97,17 @@ impl PromptBuilder {
              {\"summary\": \"one-line diagnostic summary\", \
              \"details\": \"detailed analysis and recommendations\", \
              \"severity\": \"Low|Medium|High|Critical\", \
-             \"confidence\": 0.85}\n",
+             \"confidence\": 0.85, \
+             \"suggested_actions\": [{\"description\": \"what this does\", \
+             \"command\": \"shell command to run\", \
+             \"risk\": \"Safe|Moderate|Dangerous\"}]}\n\
+             \n\
+             Rules for suggested_actions:\n\
+             - Only suggest actions you are confident will help\n\
+             - Use \"Safe\" for read-only or harmless commands (echo, cat, df, free)\n\
+             - Use \"Moderate\" for commands that modify state (kill, service restart)\n\
+             - Use \"Dangerous\" for destructive commands (rm, force kill, format)\n\
+             - Commands must be valid shell commands executable via sh -c\n",
         );
 
         prompt
@@ -247,5 +257,6 @@ mod tests {
         assert!(prompt.contains("JSON"));
         assert!(prompt.contains("summary"));
         assert!(prompt.contains("severity"));
+        assert!(prompt.contains("suggested_actions"));
     }
 }

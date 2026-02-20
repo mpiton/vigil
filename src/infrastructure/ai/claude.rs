@@ -5,9 +5,11 @@ use async_trait::async_trait;
 use chrono::Utc;
 use serde::Deserialize;
 
+use crate::domain::entities::alert::SuggestedAction;
 use crate::domain::entities::process::ProcessInfo;
 use crate::domain::entities::{AiDiagnostic, Alert, SystemSnapshot};
 use crate::domain::ports::{AiAnalyzer, AnalysisError};
+use crate::domain::value_objects::action_risk::ActionRisk;
 use crate::domain::value_objects::Severity;
 
 use super::prompt_builder::PromptBuilder;
@@ -179,6 +181,20 @@ struct RawDiagnostic {
     details: String,
     severity: Severity,
     confidence: f64,
+    #[serde(default)]
+    suggested_actions: Vec<RawSuggestedAction>,
+}
+
+#[derive(Deserialize)]
+struct RawSuggestedAction {
+    description: String,
+    command: String,
+    #[serde(default = "default_risk")]
+    risk: String,
+}
+
+fn default_risk() -> String {
+    "Safe".to_string()
 }
 
 /// Truncate a string to at most `max_bytes` without splitting a UTF-8 codepoint.
@@ -281,12 +297,34 @@ fn strip_markdown_fences(s: &str) -> String {
 }
 
 fn to_diagnostic(raw: RawDiagnostic) -> AiDiagnostic {
+    let suggested_actions = raw
+        .suggested_actions
+        .into_iter()
+        .map(|a| {
+            let risk = match a.risk.to_lowercase().as_str() {
+                "safe" => ActionRisk::Safe,
+                "moderate" => ActionRisk::Moderate,
+                "dangerous" => ActionRisk::Dangerous,
+                other => {
+                    tracing::warn!("Risque IA inconnu '{other}', défaut à Dangerous");
+                    ActionRisk::Dangerous
+                }
+            };
+            SuggestedAction {
+                description: a.description,
+                command: a.command,
+                risk,
+            }
+        })
+        .collect();
+
     AiDiagnostic {
         timestamp: Utc::now(),
         summary: raw.summary,
         details: raw.details,
         severity: raw.severity,
         confidence: raw.confidence.clamp(0.0, 1.0),
+        suggested_actions,
     }
 }
 
@@ -422,6 +460,32 @@ mod tests {
         let json = br#"{"summary":"s","details":"d","severity":"Low","confidence":1.5}"#;
         let diag = parse_response(json).expect("should parse");
         assert!((diag.confidence - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn parse_response_with_suggested_actions() {
+        let json = br#"{"summary":"High memory","details":"RAM at 95%","severity":"High","confidence":0.9,"suggested_actions":[{"description":"Free cache","command":"sync && echo 3 > /proc/sys/vm/drop_caches","risk":"Safe"}]}"#;
+        let diag = parse_response(json).expect("should parse");
+        assert_eq!(diag.suggested_actions.len(), 1);
+        assert_eq!(diag.suggested_actions[0].risk, ActionRisk::Safe);
+        assert_eq!(
+            diag.suggested_actions[0].command,
+            "sync && echo 3 > /proc/sys/vm/drop_caches"
+        );
+    }
+
+    #[test]
+    fn parse_response_without_suggested_actions_defaults_empty() {
+        let json = br#"{"summary":"OK","details":"All good","severity":"Low","confidence":0.5}"#;
+        let diag = parse_response(json).expect("should parse");
+        assert!(diag.suggested_actions.is_empty());
+    }
+
+    #[test]
+    fn parse_response_with_unknown_risk_defaults_dangerous() {
+        let json = br#"{"summary":"s","details":"d","severity":"Low","confidence":0.5,"suggested_actions":[{"description":"test","command":"echo test","risk":"unknown"}]}"#;
+        let diag = parse_response(json).expect("should parse");
+        assert_eq!(diag.suggested_actions[0].risk, ActionRisk::Dangerous);
     }
 
     #[test]

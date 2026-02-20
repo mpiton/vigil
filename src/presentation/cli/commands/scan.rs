@@ -189,6 +189,15 @@ mod tests {
         ) -> Result<(), NotificationError> {
             Ok(())
         }
+
+        fn notify_action_executed(
+            &self,
+            _action: &crate::domain::entities::alert::SuggestedAction,
+            _success: bool,
+            _output: &str,
+        ) -> Result<(), NotificationError> {
+            Ok(())
+        }
     }
 
     struct CountingNotifier {
@@ -218,6 +227,15 @@ mod tests {
             self.diagnostic_count.fetch_add(1, Ordering::Relaxed);
             Ok(())
         }
+
+        fn notify_action_executed(
+            &self,
+            _action: &crate::domain::entities::alert::SuggestedAction,
+            _success: bool,
+            _output: &str,
+        ) -> Result<(), NotificationError> {
+            Ok(())
+        }
     }
 
     struct FailingNotifier;
@@ -229,6 +247,14 @@ mod tests {
         fn notify_ai_diagnostic(
             &self,
             _diagnostic: &AiDiagnostic,
+        ) -> Result<(), NotificationError> {
+            Err(NotificationError::SendFailed("dbus down".into()))
+        }
+        fn notify_action_executed(
+            &self,
+            _action: &crate::domain::entities::alert::SuggestedAction,
+            _success: bool,
+            _output: &str,
         ) -> Result<(), NotificationError> {
             Err(NotificationError::SendFailed("dbus down".into()))
         }
@@ -391,6 +417,7 @@ mod tests {
             details: "Process X consumes 95% RAM".to_string(),
             severity: Severity::High,
             confidence: 0.87,
+            suggested_actions: vec![],
         }
     }
 

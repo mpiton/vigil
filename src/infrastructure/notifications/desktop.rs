@@ -1,6 +1,6 @@
 use notify_rust::{Notification, Timeout, Urgency};
 
-use crate::domain::entities::alert::Alert;
+use crate::domain::entities::alert::{Alert, SuggestedAction};
 use crate::domain::entities::diagnostic::AiDiagnostic;
 use crate::domain::ports::notifier::{NotificationError, Notifier};
 use crate::domain::value_objects::severity::Severity;
@@ -55,6 +55,24 @@ impl Notifier for DesktopNotifier {
         let summary = escape_markup(&truncate(&raw_summary, MAX_SUMMARY_CHARS));
         let body = escape_markup(&truncate(&diagnostic.details, MAX_BODY_CHARS));
 
+        send_notification(&summary, &body, urgency)
+    }
+
+    fn notify_action_executed(
+        &self,
+        action: &SuggestedAction,
+        success: bool,
+        _output: &str,
+    ) -> Result<(), NotificationError> {
+        let status = if success { "\u{2713}" } else { "\u{2717}" };
+        let raw_summary = format!("{status} Vigil \u{2014} Action ex\u{00e9}cut\u{00e9}e");
+        let summary = escape_markup(&truncate(&raw_summary, MAX_SUMMARY_CHARS));
+        let body = escape_markup(&truncate(&action.description, MAX_BODY_CHARS));
+        let urgency = if success {
+            Urgency::Low
+        } else {
+            Urgency::Normal
+        };
         send_notification(&summary, &body, urgency)
     }
 }
@@ -140,6 +158,7 @@ mod tests {
             details: "Process X is consuming 95% of RAM".to_string(),
             severity: Severity::High,
             confidence: 0.87,
+            suggested_actions: vec![],
         }
     }
 
@@ -278,5 +297,13 @@ mod tests {
         assert!(MAX_BODY_CHARS >= 100);
         assert!(MAX_SUMMARY_CHARS >= 50);
         assert!(MAX_BODY_CHARS > MAX_SUMMARY_CHARS);
+    }
+
+    #[test]
+    fn notify_action_executed_returns_ok_or_unavailable() {
+        let notifier = DesktopNotifier::new();
+        let action = make_action(ActionRisk::Safe);
+        let result = notifier.notify_action_executed(&action, true, "done");
+        assert!(result.is_ok() || matches!(result, Err(NotificationError::ChannelUnavailable(_))));
     }
 }

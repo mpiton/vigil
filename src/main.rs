@@ -124,6 +124,8 @@ async fn main() -> anyhow::Result<()> {
                 &store,
                 config.ai.enabled,
                 effective_mode,
+                Some(&store as &dyn vigil::domain::ports::store::ActionLogStore),
+                &config.allowlist.protected_commands,
             );
             run_daemon(&service, config.general.interval_secs).await?;
         }

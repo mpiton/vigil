@@ -1,7 +1,7 @@
 use std::io::Write;
 use std::path::PathBuf;
 
-use crate::domain::entities::alert::Alert;
+use crate::domain::entities::alert::{Alert, SuggestedAction};
 use crate::domain::entities::diagnostic::AiDiagnostic;
 use crate::domain::ports::notifier::{NotificationError, Notifier};
 
@@ -86,6 +86,24 @@ impl Notifier for LogFileNotifier {
 
         self.append_json_line(&entry)
     }
+
+    fn notify_action_executed(
+        &self,
+        action: &SuggestedAction,
+        success: bool,
+        output: &str,
+    ) -> Result<(), NotificationError> {
+        let entry = serde_json::json!({
+            "timestamp": chrono::Utc::now().to_rfc3339(),
+            "type": "action_executed",
+            "description": action.description,
+            "command": action.command,
+            "risk": format!("{}", action.risk),
+            "success": success,
+            "output": output,
+        });
+        self.append_json_line(&entry)
+    }
 }
 
 #[cfg(test)]
@@ -124,6 +142,7 @@ mod tests {
             details: "Details du diagnostic".to_string(),
             severity: Severity::Medium,
             confidence: 0.85,
+            suggested_actions: vec![],
         }
     }
 
@@ -311,5 +330,24 @@ mod tests {
             matches!(err, NotificationError::SendFailed(_)),
             "expected SendFailed, got {err:?}"
         );
+    }
+
+    #[test]
+    fn notify_action_executed_writes_json_line() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let log_path = dir.path().join("vigil.log");
+        let notifier = LogFileNotifier {
+            path: log_path.clone(),
+        };
+
+        let action = make_action(ActionRisk::Safe);
+        let result = notifier.notify_action_executed(&action, true, "ok");
+        assert!(result.is_ok());
+
+        let content = std::fs::read_to_string(&log_path).expect("read log");
+        let parsed: serde_json::Value = serde_json::from_str(content.trim()).expect("parse JSON");
+        assert_eq!(parsed["type"], "action_executed");
+        assert_eq!(parsed["command"], "echo test");
+        assert_eq!(parsed["success"], true);
     }
 }
