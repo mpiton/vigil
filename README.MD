@@ -23,11 +23,56 @@ et s'accumulent silencieusement jusqu'à saturer votre RAM → freeze → crash.
 
 ## Installation
 
+### Compilation
+
 ```bash
 git clone <repo_url>
 cd vigil
 cargo build --release
-sudo cp target/release/vigil /usr/local/bin/
+```
+
+### Service systemd (recommandé)
+
+```bash
+# Installer le binaire, le service et la config
+sudo make install
+
+# Activer le démarrage automatique
+sudo systemctl enable vigil
+
+# Démarrer le service
+sudo systemctl start vigil
+
+# Vérifier le statut
+systemctl status vigil
+
+# Consulter les logs
+journalctl -u vigil -f
+```
+
+### Installation manuelle
+
+```bash
+# Copier le binaire
+sudo install -m 0755 target/release/vigil /usr/local/bin/
+
+# Copier le service systemd
+sudo install -m 0644 contrib/vigil.service /etc/systemd/system/
+
+# Créer le dossier de config et copier la config par défaut
+sudo mkdir -p /etc/vigil
+sudo cp config.default.toml /etc/vigil/config.toml
+
+# Recharger systemd
+sudo systemctl daemon-reload
+```
+
+### Désinstallation
+
+```bash
+sudo make uninstall
+# Optionnel : supprimer la config
+sudo rm -rf /etc/vigil
 ```
 
 ## Utilisation
@@ -59,7 +104,8 @@ vigil config --edit
 
 ## Configuration
 
-La config est créée automatiquement au premier lancement dans `~/.config/vigil/config.toml`.
+En mode utilisateur, la config est créée automatiquement dans `~/.config/vigil/config.toml`.
+En mode service systemd, la config se trouve dans `/etc/vigil/config.toml` (installée par `sudo make install`).
 
 ```toml
 [general]

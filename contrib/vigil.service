@@ -1,0 +1,15 @@
+[Unit]
+Description=Vigil — AI-powered Linux system guardian
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/vigil
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=vigil
+
+[Install]
+WantedBy=default.target
