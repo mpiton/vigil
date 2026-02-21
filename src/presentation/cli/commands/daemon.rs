@@ -4,11 +4,9 @@ use crate::application::services::monitor::MonitorService;
 
 /// Run the monitoring daemon loop at the configured interval.
 ///
-/// The daemon runs until it receives a SIGINT signal (Ctrl+C) via
-/// [`tokio::signal::ctrl_c()`], at which point it shuts down gracefully and
-/// returns `Ok(())`. Note: SIGTERM is **not** handled — if systemd or container
-/// orchestration requires SIGTERM support, add a handler via
-/// `tokio::signal::unix::signal(SignalKind::terminate())`.
+/// The daemon runs until it receives a SIGINT (Ctrl+C) or SIGTERM signal,
+/// at which point it shuts down gracefully and returns `Ok(())`.
+/// SIGTERM handling is required for systemd service management.
 ///
 /// Errors during individual monitoring cycles are logged but do not stop the daemon.
 ///
@@ -20,8 +18,10 @@ pub async fn run_daemon(service: &MonitorService<'_>, interval_secs: u64) -> any
     let mut interval = tokio::time::interval(Duration::from_secs(interval_secs));
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
-    let shutdown = tokio::signal::ctrl_c();
-    tokio::pin!(shutdown);
+    let ctrl_c = tokio::signal::ctrl_c();
+    tokio::pin!(ctrl_c);
+
+    let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
 
     loop {
         tokio::select! {
@@ -43,8 +43,13 @@ pub async fn run_daemon(service: &MonitorService<'_>, interval_secs: u64) -> any
                     }
                 }
             }
-            _ = &mut shutdown => {
-                tracing::info!("Shutdown signal received, graceful shutdown...");
+            _ = &mut ctrl_c => {
+                tracing::info!("SIGINT received, graceful shutdown...");
+                println!("\nShutting down Vigil...");
+                break;
+            }
+            _ = sigterm.recv() => {
+                tracing::info!("SIGTERM received, graceful shutdown...");
                 println!("\nShutting down Vigil...");
                 break;
             }

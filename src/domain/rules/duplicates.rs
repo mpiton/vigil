@@ -8,7 +8,7 @@ use crate::domain::value_objects::thresholds::ThresholdSet;
 
 use super::Rule;
 
-const IGNORED_PROCESSES: &[&str] = &["systemd", "dbus-daemon", "Xorg", "Xwayland"];
+const IGNORED_PROCESSES: &[&str] = &["systemd", "dbus-daemon", "Xorg", "Xwayland", "vigil"];
 
 const DEV_TOOL_KEYWORDS: &[&str] = &["python", "node", "mcp", "typescript"];
 
@@ -504,5 +504,16 @@ mod tests {
         // python3 -c (no script file) → falls back to process name
         let key = normalize_process_name("python3 -c", "python3");
         assert_eq!(key, "python3");
+    }
+
+    #[test]
+    fn ignores_vigil_processes() {
+        let processes: Vec<ProcessInfo> = (0..10)
+            .map(|i| make_process(1000 + i, "vigil", "/usr/local/bin/vigil", 50))
+            .collect();
+        let snapshot = make_snapshot(processes);
+        let rule = DuplicateProcessRule;
+        let alerts = rule.evaluate(&snapshot, &ThresholdSet::default());
+        assert!(alerts.is_empty());
     }
 }

@@ -194,6 +194,7 @@ fn default_protected_commands() -> Vec<String> {
         "systemd".into(),
         "dbus-daemon".into(),
         "NetworkManager".into(),
+        "vigil".into(),
     ]
 }
 
@@ -410,7 +411,7 @@ mod tests {
         assert!(config.notifications.webhook_url.is_none());
         assert!(config.notifications.webhook_min_severity.is_none());
         assert_eq!(config.allowlist.ignore_commands.len(), 4);
-        assert_eq!(config.allowlist.protected_commands.len(), 4);
+        assert_eq!(config.allowlist.protected_commands.len(), 5);
         assert_eq!(config.database.path, "~/.local/share/vigil/vigil.db");
         assert_eq!(config.database.retention_hours, 168);
     }
