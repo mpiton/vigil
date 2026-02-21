@@ -72,6 +72,8 @@ pub struct AiConfig {
     pub timeout_secs: u64,
     #[serde(default)]
     pub ollama_url: Option<String>,
+    #[serde(default = "default_claude_binary")]
+    pub claude_binary: String,
 }
 
 /// Notification channels: desktop, terminal, log file, webhook.
@@ -179,6 +181,10 @@ const fn default_timeout() -> u64 {
     120
 }
 
+fn default_claude_binary() -> String {
+    "claude".into()
+}
+
 fn default_ignore_commands() -> Vec<String> {
     vec![
         "systemd".into(),
@@ -244,6 +250,7 @@ impl Default for AiConfig {
             cooldown_secs: default_cooldown(),
             timeout_secs: default_timeout(),
             ollama_url: None,
+            claude_binary: default_claude_binary(),
         }
     }
 }
@@ -280,16 +287,34 @@ impl Default for DatabaseConfig {
 
 // --- AppConfig methods ---
 
+/// System-wide configuration path used by the systemd service.
+const SYSTEM_CONFIG_PATH: &str = "/etc/vigil/config.toml";
+
 impl AppConfig {
-    /// Load config from default path or create default config file
+    /// Load config from default path or create default config file.
+    ///
+    /// Resolution order:
+    /// 1. User config: `~/.config/vigil/config.toml`
+    /// 2. System config: `/etc/vigil/config.toml`
+    /// 3. Create default user config if neither exists
     ///
     /// # Errors
     ///
     /// Returns an error if the config directory cannot be determined,
     /// the file cannot be read, or the TOML content is invalid.
     pub fn load() -> Result<Self> {
-        let path = Self::config_path()?;
-        Self::load_or_create(&path)
+        let user_path = Self::config_path()?;
+        if user_path.exists() {
+            return Self::load_from(&user_path);
+        }
+        let system_path = Path::new(SYSTEM_CONFIG_PATH);
+        if system_path.exists() {
+            match Self::load_from(system_path) {
+                Ok(config) => return Ok(config),
+                Err(e) => tracing::warn!("Cannot read system config {SYSTEM_CONFIG_PATH}: {e}"),
+            }
+        }
+        Self::load_or_create(&user_path)
     }
 
     /// Load from a specific path, or create a default config file if missing
@@ -404,6 +429,7 @@ mod tests {
         assert_eq!(config.ai.provider, "claude-cli");
         assert!(config.ai.enabled);
         assert!(config.ai.ollama_url.is_none());
+        assert_eq!(config.ai.claude_binary, "claude");
         assert_eq!(config.ai.cooldown_secs, 60);
         assert!(config.notifications.desktop);
         assert!(config.notifications.terminal);
@@ -607,6 +633,27 @@ interval_secs = 42
             thresholds.disk_warning,
             thresholds.disk_critical
         );
+    }
+
+    #[test]
+    fn claude_binary_configurable_via_toml() {
+        let toml_str = r#"
+[ai]
+claude_binary = "/home/user/.local/bin/claude"
+"#;
+        let config: AppConfig = toml::from_str(toml_str).expect("parse toml with claude_binary");
+        assert_eq!(config.ai.claude_binary, "/home/user/.local/bin/claude");
+    }
+
+    #[test]
+    fn claude_binary_defaults_to_claude() {
+        let config: AppConfig = toml::from_str("").expect("parse empty toml");
+        assert_eq!(config.ai.claude_binary, "claude");
+    }
+
+    #[test]
+    fn system_config_path_is_etc_vigil() {
+        assert_eq!(SYSTEM_CONFIG_PATH, "/etc/vigil/config.toml");
     }
 
     #[test]

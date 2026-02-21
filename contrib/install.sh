@@ -13,6 +13,10 @@ SYSTEMD_DIR="/etc/systemd/system"
 SERVICE_FILE="contrib/vigil.service"
 CONFIG_FILE="config.default.toml"
 
+# Detect the real user behind sudo
+RUN_USER="${SUDO_USER:-$(whoami)}"
+RUN_GROUP="$(id -gn "$RUN_USER")"
+
 # Check if running as root
 if [[ $EUID -ne 0 ]]; then
     echo "Error: This script must be run as root." >&2
@@ -36,9 +40,11 @@ fi
 echo "Installing binary..."
 install -m 0755 "$BINARY_PATH" "$INSTALL_DIR/$BINARY_NAME"
 
-# Copy service file
-echo "Installing systemd service file..."
-install -m 0644 "$SERVICE_FILE" "$SYSTEMD_DIR/$BINARY_NAME.service"
+# Install systemd service file with User= set to the installing user
+echo "Installing systemd service file (User=$RUN_USER)..."
+sed "s/^# User= is set by install.sh.*/User=$RUN_USER\nGroup=$RUN_GROUP/" \
+    "$SERVICE_FILE" > "$SYSTEMD_DIR/$BINARY_NAME.service"
+chmod 0644 "$SYSTEMD_DIR/$BINARY_NAME.service"
 
 # Create config directory
 echo "Creating configuration directory..."
@@ -48,6 +54,7 @@ mkdir -p "$CONFIG_DIR"
 if [[ ! -f "$CONFIG_DIR/config.toml" ]]; then
     echo "Installing configuration file..."
     install -m 0640 "$CONFIG_FILE" "$CONFIG_DIR/config.toml"
+    chown "$RUN_USER:$RUN_GROUP" "$CONFIG_DIR/config.toml"
 else
     echo "Configuration file already exists, not overwriting."
 fi
@@ -58,7 +65,7 @@ systemctl daemon-reload
 
 # Success message
 echo ""
-echo "✓ Installation successful!"
+echo "Installation successful!"
 echo ""
 echo "Next steps:"
 echo "  1. Check the configuration: sudo nano $CONFIG_DIR/config.toml"
