@@ -7,10 +7,10 @@ use crate::domain::ports::store::{ActionLogStore, ActionRecord};
 use crate::domain::value_objects::action_risk::ActionRisk;
 use crate::presentation::cli::formatters::status_fmt::print_section_header;
 
-/// Termine un processus par son PID avec envoi de signal POSIX.
+/// Terminate a process by PID with POSIX signal delivery.
 ///
-/// Affiche les informations du processus (si disponibles), envoie
-/// SIGTERM (par défaut) ou SIGKILL (`--force`), et journalise l'action.
+/// Display process information (if available), send
+/// SIGTERM (default) or SIGKILL (`--force`), and log the action.
 ///
 /// # Errors
 ///
@@ -28,10 +28,10 @@ pub fn run_kill(
     // Show process info before killing (best effort)
     if let Ok(snapshot) = collector.collect() {
         if let Some(proc_info) = snapshot.processes.iter().find(|p| p.pid == pid) {
-            print_section_header("Processus à arrêter");
+            print_section_header("Process to terminate");
             println!("  {}: {}", "PID".bold(), proc_info.pid);
-            println!("  {}: {}", "Nom".bold(), proc_info.name);
-            println!("  {}: {}", "Commande".bold(), proc_info.cmdline);
+            println!("  {}: {}", "Name".bold(), proc_info.name);
+            println!("  {}: {}", "Command".bold(), proc_info.cmdline);
             println!("  {}: {} MB", "RAM".bold(), proc_info.rss_mb);
             println!("  {}: {:.1}%", "CPU".bold(), proc_info.cpu_percent);
         }
@@ -46,7 +46,7 @@ pub fn run_kill(
     match manager.signal(pid, signal) {
         Ok(()) => {
             println!(
-                "{} Signal {} envoyé au processus {}",
+                "{} Signal {} sent to process {}",
                 "✓".green().bold(),
                 signal_name.bold(),
                 pid
@@ -63,7 +63,7 @@ pub fn run_kill(
                     timestamp: Utc::now(),
                     alert_id: None,
                     command,
-                    result: Some("processus arrêté".to_string()),
+                    result: Some("process terminated".to_string()),
                     risk: if force {
                         ActionRisk::Dangerous
                     } else {
@@ -71,20 +71,20 @@ pub fn run_kill(
                     },
                 };
                 if let Err(e) = store.log_action(&record) {
-                    tracing::warn!("Échec de journalisation : {e}");
+                    tracing::warn!("Logging failed: {e}");
                 }
             }
 
             Ok(())
         }
         Err(ProcessError::NotFound(p)) => {
-            anyhow::bail!("Processus avec PID {p} non trouvé")
+            anyhow::bail!("Process with PID {p} not found")
         }
         Err(ProcessError::PermissionDenied(p)) => {
-            anyhow::bail!("Permission refusée pour le processus {p}")
+            anyhow::bail!("Permission denied for process {p}")
         }
         Err(ProcessError::SignalFailed(msg)) => {
-            anyhow::bail!("Échec d'envoi du signal : {msg}")
+            anyhow::bail!("Failed to send signal: {msg}")
         }
     }
 }

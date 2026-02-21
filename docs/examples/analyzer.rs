@@ -57,11 +57,11 @@ impl<'a> RuleAnalyzer<'a> {
                 severity: Severity::Critical,
                 rule: "ram_critical".into(),
                 title: format!(
-                    "RAM critique : {:.1}% utilisée ({}/{} MB)",
+                    "Critical RAM: {:.1}% used ({}/{} MB)",
                     mem.usage_percent, mem.used_mb, mem.total_mb
                 ),
                 details: format!(
-                    "Top consommateurs RAM :\n{}",
+                    "Top RAM consumers:\n{}",
                     top_procs
                         .iter()
                         .map(|p| format!(
@@ -75,7 +75,7 @@ impl<'a> RuleAnalyzer<'a> {
                     .iter()
                     .filter(|p| !self.is_protected(&p.name))
                     .map(|p| SuggestedAction {
-                        description: format!("Tuer {} (PID {}, {} MB)", p.name, p.pid, p.rss_mb),
+                        description: format!("Kill {} (PID {}, {} MB)", p.name, p.pid, p.rss_mb),
                         command: format!("kill {}", p.pid),
                         risk: ActionRisk::Moderate,
                     })
@@ -87,12 +87,12 @@ impl<'a> RuleAnalyzer<'a> {
                 severity: Severity::High,
                 rule: "ram_warning".into(),
                 title: format!(
-                    "RAM élevée : {:.1}% utilisée ({}/{} MB)",
+                    "High RAM: {:.1}% used ({}/{} MB)",
                     mem.usage_percent, mem.used_mb, mem.total_mb
                 ),
-                details: "La RAM approche du seuil critique.".into(),
+                details: "RAM approaching critical threshold.".into(),
                 suggested_actions: vec![SuggestedAction {
-                    description: "Libérer le cache système".into(),
+                    description: "Clear system cache".into(),
                     command: "sync && echo 3 | sudo tee /proc/sys/vm/drop_caches".into(),
                     risk: ActionRisk::Safe,
                 }],
@@ -113,10 +113,10 @@ impl<'a> RuleAnalyzer<'a> {
                 severity: Severity::High,
                 rule: "swap_warning".into(),
                 title: format!(
-                    "Swap élevé : {:.1}% ({}/{} MB)",
+                    "High Swap: {:.1}% ({}/{} MB)",
                     mem.swap_percent, mem.swap_used_mb, mem.swap_total_mb
                 ),
-                details: "Le système utilise beaucoup de swap, ce qui ralentit les performances."
+                details: "System using heavy swap, degrading performance."
                     .into(),
                 suggested_actions: vec![],
             });
@@ -139,11 +139,11 @@ impl<'a> RuleAnalyzer<'a> {
                 severity: Severity::High,
                 rule: "cpu_overload".into(),
                 title: format!(
-                    "CPU surchargé : load {:.2}/{:.2}/{:.2} ({} cœurs, seuil: {:.1})",
+                    "CPU overloaded: load {:.2}/{:.2}/{:.2} ({} cores, threshold: {:.1})",
                     cpu.load_avg_1m, cpu.load_avg_5m, cpu.load_avg_15m, cpu.core_count, max_load
                 ),
                 details: format!(
-                    "Top consommateurs CPU :\n{}",
+                    "Top CPU consumers:\n{}",
                     top_procs
                         .iter()
                         .map(|p| format!(
@@ -175,7 +175,7 @@ impl<'a> RuleAnalyzer<'a> {
                 timestamp: ts,
                 severity: Severity::Medium,
                 rule: "zombie_processes".into(),
-                title: format!("{} processus zombie(s) détecté(s)", zombies.len()),
+                title: format!("{} zombie process(es) detected", zombies.len()),
                 details: zombies
                     .iter()
                     .map(|z| format!("  PID {} ({}) — parent PID {}", z.pid, z.name, z.ppid))
@@ -185,7 +185,7 @@ impl<'a> RuleAnalyzer<'a> {
                     .iter()
                     .map(|z| SuggestedAction {
                         description: format!(
-                            "Signaler le parent (PID {}) pour récolter le zombie",
+                            "Signal parent (PID {}) to reap zombie",
                             z.ppid
                         ),
                         command: format!("kill -SIGCHLD {}", z.ppid),
@@ -237,9 +237,9 @@ impl<'a> RuleAnalyzer<'a> {
                 };
 
                 let context = if likely_dev_tool {
-                    "Probablement des processus MCP/dev non terminés."
+                    "Likely unterminated MCP/dev processes."
                 } else {
-                    "Nombre inhabituel de processus identiques."
+                    "Unusual number of identical processes."
                 };
 
                 alerts.push(Alert {
@@ -247,24 +247,24 @@ impl<'a> RuleAnalyzer<'a> {
                     severity,
                     rule: "duplicate_processes".into(),
                     title: format!(
-                        "{} instances de \"{}\" ({} MB total, CPU {:.1}%)",
+                        "{} instances of \"{}\" ({} MB total, CPU {:.1}%)",
                         procs.len(),
                         name,
                         total_ram_mb,
                         total_cpu
                     ),
                     details: format!(
-                        "{}\nPIDs: {:?}\nRAM totale: {} MB | CPU totale: {:.1}%",
+                        "{}\nPIDs: {:?}\nTotal RAM: {} MB | Total CPU: {:.1}%",
                         context, pids, total_ram_mb, total_cpu
                     ),
                     suggested_actions: vec![
                         SuggestedAction {
-                            description: format!("Tuer tous les processus \"{}\"", name),
+                            description: format!("Kill all \"{}\" processes", name),
                             command: format!("pkill -f '{}'", name),
                             risk: ActionRisk::Moderate,
                         },
                         SuggestedAction {
-                            description: "Tuer par liste de PIDs".into(),
+                            description: "Kill by PID list".into(),
                             command: format!(
                                 "kill {}",
                                 pids.iter()
@@ -315,7 +315,7 @@ impl<'a> RuleAnalyzer<'a> {
                 severity: Severity::High,
                 rule: "orphan_dev_processes".into(),
                 title: format!(
-                    "{} processus dev orphelin(s) détecté(s) ({} MB)",
+                    "{} orphaned dev process(es) detected ({} MB)",
                     orphans.len(),
                     total_ram
                 ),
@@ -336,7 +336,7 @@ impl<'a> RuleAnalyzer<'a> {
                 suggested_actions: orphans
                     .iter()
                     .map(|p| SuggestedAction {
-                        description: format!("Tuer {} (PID {})", p.name, p.pid),
+                        description: format!("Kill {} (PID {})", p.name, p.pid),
                         command: format!("kill {}", p.pid),
                         risk: ActionRisk::Safe,
                     })
@@ -365,21 +365,21 @@ impl<'a> RuleAnalyzer<'a> {
                     severity,
                     rule: "disk_space_low".into(),
                     title: format!(
-                        "Disque {} presque plein : {:.1}% utilisé ({:.1} GB libre)",
+                        "Disk {} almost full: {:.1}% used ({:.1} GB free)",
                         disk.mount_point, disk.usage_percent, disk.available_gb
                     ),
                     details: format!(
-                        "Point de montage: {}\nSystème de fichiers: {}\nTotal: {:.1} GB",
+                        "Mount point: {}\nFilesystem: {}\nTotal: {:.1} GB",
                         disk.mount_point, disk.filesystem, disk.total_gb
                     ),
                     suggested_actions: vec![
                         SuggestedAction {
-                            description: "Nettoyer les journaux système".into(),
+                            description: "Clean system journals".into(),
                             command: "sudo journalctl --vacuum-size=500M".into(),
                             risk: ActionRisk::Safe,
                         },
                         SuggestedAction {
-                            description: "Trouver les gros fichiers".into(),
+                            description: "Find large files".into(),
                             command: format!(
                                 "du -sh {}/* 2>/dev/null | sort -rh | head -20",
                                 disk.mount_point
@@ -415,7 +415,7 @@ impl<'a> RuleAnalyzer<'a> {
                 severity: Severity::Critical,
                 rule: "oom_killer".into(),
                 title: format!(
-                    "OOM Killer actif — {} événement(s) récent(s)",
+                    "OOM Killer active — {} recent event(s)",
                     oom_entries.len()
                 ),
                 details: oom_entries
@@ -425,7 +425,7 @@ impl<'a> RuleAnalyzer<'a> {
                     .collect::<Vec<_>>()
                     .join("\n"),
                 suggested_actions: vec![SuggestedAction {
-                    description: "Identifier le processus le plus gourmand".into(),
+                    description: "Identify heaviest process".into(),
                     command: "ps aux --sort=-%mem | head -10".into(),
                     risk: ActionRisk::Safe,
                 }],

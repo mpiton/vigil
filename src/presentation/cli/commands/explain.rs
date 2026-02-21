@@ -19,31 +19,31 @@ pub async fn run_explain(
 ) -> anyhow::Result<()> {
     let snapshot = collector
         .collect()
-        .context("Échec de la collecte système")?;
+        .context("Failed to collect system data")?;
 
     let process = snapshot
         .processes
         .iter()
         .find(|p| p.pid == pid)
-        .ok_or_else(|| anyhow::anyhow!("Processus avec PID {pid} non trouvé"))?;
+        .ok_or_else(|| anyhow::anyhow!("Process with PID {pid} not found"))?;
 
     print_process_info(process);
 
     if ai_enabled {
         match analyzer.explain_process(process).await {
             Ok(Some(text)) => {
-                print_section_header("Explication IA");
+                print_section_header("AI Explanation");
                 println!("{text}");
             }
             Ok(None) => {
                 println!(
                     "{}",
-                    "Analyse IA non disponible (en attente de cooldown)".yellow()
+                    "AI analysis unavailable (cooldown in progress)".yellow()
                 );
             }
             Err(e) => {
-                tracing::warn!("Échec de l'analyse IA : {e}");
-                println!("{}", "⚠ Analyse IA échouée".yellow());
+                tracing::warn!("AI analysis failed: {e}");
+                println!("{}", "⚠ AI analysis failed".yellow());
             }
         }
     }
@@ -52,20 +52,16 @@ pub async fn run_explain(
 }
 
 fn print_process_info(process: &ProcessInfo) {
-    print_section_header("🔍 Informations du processus");
-    println!("{}: {}", "Nom".bold(), process.name);
-    println!("{}: {}", "Ligne de commande".bold(), process.cmdline);
-    println!("{}: {}", "État".bold(), process.state);
-    println!("{}: {} MB", "Mémoire RSS".bold(), process.rss_mb);
-    println!("{}: {} MB", "Mémoire virtuelle".bold(), process.vms_mb);
+    print_section_header("🔍 Process information");
+    println!("{}: {}", "Name".bold(), process.name);
+    println!("{}: {}", "Command line".bold(), process.cmdline);
+    println!("{}: {}", "State".bold(), process.state);
+    println!("{}: {} MB", "RSS Memory".bold(), process.rss_mb);
+    println!("{}: {} MB", "Virtual Memory".bold(), process.vms_mb);
     println!("{}: {:.1}%", "CPU".bold(), process.cpu_percent);
-    println!("{}: {}", "PID parent".bold(), process.ppid);
-    println!(
-        "{}: {}",
-        "Descripteurs de fichiers".bold(),
-        process.open_fds
-    );
-    println!("{}: {}", "Utilisateur".bold(), process.user);
+    println!("{}: {}", "Parent PID".bold(), process.ppid);
+    println!("{}: {}", "File descriptors".bold(), process.open_fds);
+    println!("{}: {}", "User".bold(), process.user);
 }
 
 #[cfg(test)]
@@ -133,7 +129,7 @@ mod tests {
             &self,
             _process: &ProcessInfo,
         ) -> Result<Option<String>, AnalysisError> {
-            Ok(Some("Ce processus consomme beaucoup de CPU.".to_string()))
+            Ok(Some("This process consumes a lot of CPU.".to_string()))
         }
     }
 

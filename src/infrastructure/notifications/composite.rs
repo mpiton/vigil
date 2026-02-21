@@ -28,7 +28,7 @@ impl Notifier for CompositeNotifier {
         let mut first_error = None;
         for notifier in &self.notifiers {
             if let Err(e) = notifier.notify(alert) {
-                tracing::warn!("Échec notification : {e}");
+                tracing::warn!("Notification failed: {e}");
                 if first_error.is_none() {
                     first_error = Some(e);
                 }
@@ -41,7 +41,7 @@ impl Notifier for CompositeNotifier {
         let mut first_error = None;
         for notifier in &self.notifiers {
             if let Err(e) = notifier.notify_ai_diagnostic(diagnostic) {
-                tracing::warn!("Échec notification diagnostic : {e}");
+                tracing::warn!("Diagnostic notification failed: {e}");
                 if first_error.is_none() {
                     first_error = Some(e);
                 }
@@ -59,7 +59,7 @@ impl Notifier for CompositeNotifier {
         let mut first_error = None;
         for notifier in &self.notifiers {
             if let Err(e) = notifier.notify_action_executed(action, success, output) {
-                tracing::warn!("Échec notification action : {e}");
+                tracing::warn!("Action notification failed: {e}");
                 if first_error.is_none() {
                     first_error = Some(e);
                 }

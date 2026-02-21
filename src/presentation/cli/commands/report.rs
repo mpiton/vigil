@@ -51,20 +51,20 @@ pub fn run_report(
     json: bool,
 ) -> anyhow::Result<()> {
     if hours == 0 {
-        anyhow::bail!("La fenêtre temporelle doit être supérieure à 0");
+        anyhow::bail!("Time window must be greater than 0");
     }
-    let i_hours = i64::try_from(hours).map_err(|e| anyhow::anyhow!("heures invalides : {e}"))?;
+    let i_hours = i64::try_from(hours).map_err(|e| anyhow::anyhow!("invalid hours: {e}"))?;
     let delta = chrono::TimeDelta::try_hours(i_hours)
-        .ok_or_else(|| anyhow::anyhow!("fenêtre temporelle invalide"))?;
+        .ok_or_else(|| anyhow::anyhow!("invalid time window"))?;
     let now = Utc::now();
     let since = now - delta;
 
     let alerts = alert_store
         .get_alerts_since(since)
-        .map_err(|e| anyhow::anyhow!("échec lecture alertes : {e}"))?;
+        .map_err(|e| anyhow::anyhow!("failed to read alerts: {e}"))?;
     let snapshots = snapshot_store
         .get_snapshots_since(since)
-        .map_err(|e| anyhow::anyhow!("échec lecture snapshots : {e}"))?;
+        .map_err(|e| anyhow::anyhow!("failed to read snapshots: {e}"))?;
 
     let by_severity = count_by_severity(&alerts);
     let peak_ram = peak_ram_percent(&snapshots);
@@ -185,28 +185,28 @@ fn print_report_human(
     peak_cpu: Option<f64>,
     top_rules: &[RuleCount],
 ) {
-    print_section_header(&format!("\u{1f4ca} Rapport des dernières {hours}h"));
+    print_section_header(&format!("\u{1f4ca} Report for the last {hours}h"));
 
     if alerts.is_empty() {
-        println!("{}", "✅ Aucune alerte sur cette période".green().bold());
+        println!("{}", "✅ No alerts in this period".green().bold());
         println!();
         return;
     }
 
     // Summary
-    println!("{}", "Résumé".bold().underline());
-    println!("  Total : {} alerte(s)", alerts.len().to_string().bold());
+    println!("{}", "Summary".bold().underline());
+    println!("  Total: {} alert(s)", alerts.len().to_string().bold());
     if by_severity.critical > 0 {
-        println!("  {} Critical : {}", "🔴".red(), by_severity.critical);
+        println!("  {} Critical: {}", "🔴".red(), by_severity.critical);
     }
     if by_severity.high > 0 {
-        println!("  🟠 High : {}", by_severity.high);
+        println!("  🟠 High: {}", by_severity.high);
     }
     if by_severity.medium > 0 {
-        println!("  🟡 Medium : {}", by_severity.medium);
+        println!("  🟡 Medium: {}", by_severity.medium);
     }
     if by_severity.low > 0 {
-        println!("  🔵 Low : {}", by_severity.low);
+        println!("  🔵 Low: {}", by_severity.low);
     }
     println!();
 
@@ -215,8 +215,8 @@ fn print_report_human(
     println!(
         "  {:<12} {:<12} {}",
         "Date".dimmed(),
-        "Sévérité".dimmed(),
-        "Titre".dimmed()
+        "Severity".dimmed(),
+        "Title".dimmed()
     );
     println!("  {}", "─".repeat(55).dimmed());
     // Show alerts in chronological order (oldest first)
@@ -234,16 +234,16 @@ fn print_report_human(
     println!();
 
     // Statistics
-    println!("{}", "Statistiques".bold().underline());
+    println!("{}", "Statistics".bold().underline());
     if let Some(ram) = peak_ram {
-        println!("  Pic RAM  : {}", colorize_percent(ram));
+        println!("  Peak RAM: {}", colorize_percent(ram));
     }
     if let Some(cpu) = peak_cpu {
-        println!("  Pic CPU  : {}", colorize_percent(cpu));
+        println!("  Peak CPU: {}", colorize_percent(cpu));
     }
     if !top_rules.is_empty() {
         println!();
-        println!("  {}", "Règles les plus fréquentes :".dimmed());
+        println!("  {}", "Most frequent rules:".dimmed());
         for rule in top_rules {
             println!("    {} × {}", rule.count.to_string().bold(), rule.rule);
         }

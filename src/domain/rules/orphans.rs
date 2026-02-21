@@ -65,7 +65,7 @@ impl Rule for OrphanDevProcessRule {
         let suggested_actions = orphans
             .iter()
             .map(|p| SuggestedAction {
-                description: format!("Tuer {} (PID {})", p.name, p.pid),
+                description: format!("Kill {} (PID {})", p.name, p.pid),
                 command: format!("kill {}", p.pid),
                 risk: ActionRisk::Safe,
             })
@@ -255,7 +255,7 @@ mod tests {
         assert_eq!(alerts[0].suggested_actions[0].risk, ActionRisk::Safe);
         assert!(alerts[0].suggested_actions[0]
             .description
-            .starts_with("Tuer "));
+            .starts_with("Kill "));
     }
 
     #[test]

@@ -114,9 +114,9 @@ impl Rule for DuplicateProcessRule {
             };
 
             let context = if likely_dev_tool {
-                "Probablement des processus MCP/dev non terminés."
+                "Likely unterminated MCP/dev processes."
             } else {
-                "Nombre inhabituel de processus identiques."
+                "Unusual number of identical processes."
             };
 
             let pattern = pkill_pattern(group_key, &procs[0].cmdline);
@@ -127,23 +127,23 @@ impl Rule for DuplicateProcessRule {
                 severity,
                 rule: "duplicate_processes".to_string(),
                 title: format!(
-                    "{} instances de \"{}\" ({} MB total, CPU {:.1}%)",
+                    "{} instances of \"{}\" ({} MB total, CPU {:.1}%)",
                     procs.len(),
                     group_key,
                     total_ram_mb,
                     total_cpu
                 ),
                 details: format!(
-                    "{context}\nPIDs: {pids:?}\nRAM totale: {total_ram_mb} MB | CPU totale: {total_cpu:.1}%"
+                    "{context}\nPIDs: {pids:?}\nTotal RAM: {total_ram_mb} MB | Total CPU: {total_cpu:.1}%"
                 ),
                 suggested_actions: vec![
                     SuggestedAction {
-                        description: format!("Tuer tous les processus \"{group_key}\""),
+                        description: format!("Kill all \"{group_key}\" processes"),
                         command: format!("pkill -f '{escaped_pattern}'"),
                         risk: ActionRisk::Moderate,
                     },
                     SuggestedAction {
-                        description: "Tuer par liste de PIDs".to_string(),
+                        description: "Kill by PID list".to_string(),
                         command: format!(
                             "kill {}",
                             pids.iter()

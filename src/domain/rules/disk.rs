@@ -29,21 +29,21 @@ impl Rule for DiskSpaceRule {
                     severity,
                     rule: "disk_space_low".to_string(),
                     title: format!(
-                        "Disque {} presque plein : {:.1}% utilisé ({:.1} GB libre)",
+                        "Disk {} almost full: {:.1}% used ({:.1} GB free)",
                         disk.mount_point, disk.usage_percent, disk.available_gb
                     ),
                     details: format!(
-                        "Point de montage: {}\nSystème de fichiers: {}\nTotal: {:.1} GB",
+                        "Mount point: {}\nFilesystem: {}\nTotal: {:.1} GB",
                         disk.mount_point, disk.filesystem, disk.total_gb
                     ),
                     suggested_actions: vec![
                         SuggestedAction {
-                            description: "Nettoyer les journaux système".to_string(),
+                            description: "Clean system logs".to_string(),
                             command: "sudo journalctl --vacuum-size=500M".to_string(),
                             risk: ActionRisk::Safe,
                         },
                         SuggestedAction {
-                            description: "Trouver les gros fichiers".to_string(),
+                            description: "Find large files".to_string(),
                             command: format!(
                                 "du -sh '{}'/* 2>/dev/null | sort -rh | head -20",
                                 disk.mount_point.replace('\'', "'\\''")

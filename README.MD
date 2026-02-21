@@ -1,29 +1,29 @@
 # 🛡️ Vigil — AI-Powered Linux System Guardian
 
-Vigil surveille en continu vos processus, RAM, CPU, disques et journaux système.
-Il détecte les anomalies et propose des corrections intelligentes via Claude AI
-pour empêcher votre PC de ralentir ou crasher.
+Vigil continuously monitors your processes, RAM, CPU, disks, and system logs.
+It detects anomalies and proposes intelligent fixes via Claude AI
+to prevent your PC from slowing down or crashing.
 
-## Le problème
+## The Problem
 
-Vous utilisez Claude Code, des MCP servers, ou d'autres outils de dev qui créent
-des processus en arrière-plan. Parfois ces processus ne se terminent pas proprement
-et s'accumulent silencieusement jusqu'à saturer votre RAM → freeze → crash.
+You use Claude Code, MCP servers, or other development tools that create
+background processes. Sometimes these processes don't terminate properly
+and accumulate silently until your RAM is saturated → freeze → crash.
 
-**Vigil détecte ça et vous alerte avant que ça ne dégénère.**
+**Vigil detects this and alerts you before it degenerates.**
 
-## Fonctionnalités
+## Features
 
-- 📊 **Monitoring continu** — RAM, CPU, swap, disques, processus, journaux
-- 🔍 **Détection de processus fantômes** — identifie les MCP/Python/Node orphelins
-- 🧟 **Détection de zombies** — processus zombie qui consomment des ressources
-- 🤖 **Analyse IA** — Claude explique le problème et propose des solutions
-- 🔔 **Notifications** — terminal, desktop, logs JSON, webhooks
-- ⚡ **Mode auto** — exécute automatiquement les actions sûres
+- 📊 **Continuous Monitoring** — RAM, CPU, swap, disks, processes, logs
+- 🔍 **Ghost Process Detection** — identifies orphaned MCP/Python/Node processes
+- 🧟 **Zombie Detection** — zombie processes consuming resources
+- 🤖 **AI Analysis** — Claude explains the problem and proposes solutions
+- 🔔 **Notifications** — terminal, desktop, JSON logs, webhooks
+- ⚡ **Auto Mode** — automatically executes safe actions
 
 ## Installation
 
-### Compilation
+### Build
 
 ```bash
 git clone <repo_url>
@@ -31,81 +31,81 @@ cd vigil
 cargo build --release
 ```
 
-### Service systemd (recommandé)
+### Systemd Service (recommended)
 
 ```bash
-# Installer le binaire, le service et la config
+# Install binary, service, and config
 sudo make install
 
-# Activer le démarrage automatique
+# Enable automatic startup
 sudo systemctl enable vigil
 
-# Démarrer le service
+# Start the service
 sudo systemctl start vigil
 
-# Vérifier le statut
+# Check status
 systemctl status vigil
 
-# Consulter les logs
+# View logs
 journalctl -u vigil -f
 ```
 
-### Installation manuelle
+### Manual Installation
 
 ```bash
-# Copier le binaire
+# Copy binary
 sudo install -m 0755 target/release/vigil /usr/local/bin/
 
-# Copier le service systemd
+# Copy systemd service
 sudo install -m 0644 contrib/vigil.service /etc/systemd/system/
 
-# Créer le dossier de config et copier la config par défaut
+# Create config folder and copy default config
 sudo mkdir -p /etc/vigil
 sudo cp config.default.toml /etc/vigil/config.toml
 
-# Recharger systemd
+# Reload systemd
 sudo systemctl daemon-reload
 ```
 
-### Désinstallation
+### Uninstall
 
 ```bash
 sudo make uninstall
-# Optionnel : supprimer la config
+# Optional: remove config
 sudo rm -rf /etc/vigil
 ```
 
-## Utilisation
+## Usage
 
 ```bash
-# Scan instantané du système
+# Instant system scan
 vigil scan
 
-# Scan avec analyse IA
+# Scan with AI analysis
 vigil scan --ai
 
-# Status rapide
+# Quick status
 vigil status
 
-# Lancer le daemon (surveillance continue)
+# Launch the daemon (continuous monitoring)
 vigil
 
-# Expliquer un processus suspect
+# Explain a suspicious process
 vigil explain 12345
 
-# Tuer un processus
+# Kill a process
 vigil kill 12345
 vigil kill 12345 --force
 
-# Voir/éditer la config
+# View/edit config
 vigil config
 vigil config --edit
 ```
 
 ## Configuration
 
-En mode utilisateur, la config est créée automatiquement dans `~/.config/vigil/config.toml`.
-En mode service systemd, la config se trouve dans `/etc/vigil/config.toml` (installée par `sudo make install`).
+In user mode, the config is automatically created in `~/.config/vigil/config.toml`.
+In systemd service mode, the config is in `/etc/vigil/config.toml` (installed by `sudo make install`).
 
 ```toml
 [general]
@@ -124,17 +124,17 @@ model = "claude-sonnet-4-20250514"
 cooldown_secs = 60
 ```
 
-## Prérequis
+## Requirements
 
 - Linux (Ubuntu/Fedora/Arch/NixOS)
 - Rust 1.75+
-- `claude` CLI (pour l'analyse IA via abonnement Claude) **ou** Ollama (pour un LLM local)
-- `journalctl` accessible (pour les logs système)
-- `libdbus` (pour les notifications desktop)
+- `claude` CLI (for AI analysis via Claude subscription) **or** Ollama (for a local LLM)
+- `journalctl` accessible (for system logs)
+- `libdbus` (for desktop notifications)
 
 ## Architecture
 
-Voir [ARCHITECTURE.md](ARCHITECTURE.md) pour les détails techniques complets.
+See [ARCHITECTURE.md](docs/ARCHITECTURE.MD) for complete technical details.
 
 ## License
 

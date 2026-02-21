@@ -2,17 +2,16 @@
 
 ## Vision
 
-Vigil est un daemon Linux écrit en Rust qui surveille en continu les ressources système
-(processus, RAM, CPU, GPU, disques, journaux), détecte les anomalies et propose des
-corrections intelligentes via l'API Claude. Pensé pour les développeurs qui utilisent
-des outils comme Claude Code, des MCP servers, et d'autres processus qui peuvent
-dégénérer silencieusement.
+Vigil is a Linux daemon written in Rust that continuously monitors system resources
+(processes, RAM, CPU, GPU, disks, logs), detects anomalies and proposes
+intelligent corrections via the Claude API. Designed for developers who use
+tools like Claude Code, MCP servers, and other processes that can degrade silently.
 
 ---
 
-## Architecture Haut Niveau
+## High-Level Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                        VIGIL DAEMON                             │
 │                                                                 │
@@ -29,8 +28,8 @@ dégénérer silencieusement.
 │         ▼                 ▼                      ▼               │
 │  ┌──────────────────────────────────────────────────────────┐   │
 │  │                    State Store (SQLite)                   │   │
-│  │  • Snapshots historiques   • Alertes émises               │   │
-│  │  • Baselines apprises      • Actions exécutées            │   │
+│  │  • Historical snapshots    • Alerts issued                │   │
+│  │  • Learned baselines       • Actions executed             │   │
 │  └──────────────────────────────────────────────────────────┘   │
 │                                                                 │
 │  ┌──────────────────────────────────────────────────────────┐   │
@@ -43,132 +42,132 @@ dégénérer silencieusement.
 
 ---
 
-## Modules Détaillés
+## Detailed Modules
 
 ### 1. Collectors (`src/collectors/`)
 
-Chaque collector implémente le trait `Collector` et fournit des snapshots à intervalle régulier.
+Each collector implements the `Collector` trait and provides snapshots at regular intervals.
 
-| Collector | Source | Données |
-|-----------|--------|---------|
-| `ProcessCollector` | `/proc/[pid]/*` | PID, nom, cmdline, CPU%, RSS, état, parent, durée, open FDs |
-| `MemoryCollector` | `/proc/meminfo` + sysinfo | RAM totale/utilisée/cache, swap, pression mémoire |
-| `CpuCollector` | `/proc/stat` + sysinfo | Usage par cœur, load average, fréquence, température |
-| `GpuCollector` | NVML / sysfs | VRAM, utilisation GPU, température, processus GPU |
-| `DiskCollector` | `/proc/diskstats` + statvfs | I/O rates, espace libre, inodes, latence |
-| `JournalCollector` | `journald` (sd-journal) | Entrées récentes filtrées (priority ≤ warning) |
-| `NetworkCollector` | `/proc/net/dev` | Bandwidth par interface, connexions ouvertes |
+| Collector | Source | Data |
+|-----------|--------|------|
+| `ProcessCollector` | `/proc/[pid]/*` | PID, name, cmdline, CPU%, RSS, state, parent, duration, open FDs |
+| `MemoryCollector` | `/proc/meminfo` + sysinfo | Total/used/cached RAM, swap, memory pressure |
+| `CpuCollector` | `/proc/stat` + sysinfo | Usage per core, load average, frequency, temperature |
+| `GpuCollector` | NVML / sysfs | VRAM, GPU utilization, temperature, GPU processes |
+| `DiskCollector` | `/proc/diskstats` + statvfs | I/O rates, free space, inodes, latency |
+| `JournalCollector` | `journald` (sd-journal) | Recent entries filtered (priority ≤ warning) |
+| `NetworkCollector` | `/proc/net/dev` | Bandwidth per interface, open connections |
 
 ### 2. Analyzer (`src/analyzer/`)
 
-Deux niveaux d'analyse qui fonctionnent en pipeline :
+Two levels of analysis working in pipeline:
 
-#### Niveau 1 — Règles Déterministes (rapide, local, gratuit)
+#### Level 1 — Deterministic Rules (fast, local, free)
+```text
+- RAM used > 85% for > 30s        → HIGH alert
+- Zombie process (state Z) > 5 min → MEDIUM alert
+- Orphaned process with CPU > 0    → MEDIUM alert
+- Same cmdline × N instances (N > threshold) → ALERT (MCP/Python case)
+- Swap usage > 50%                 → HIGH alert
+- Disk < 5% free space             → CRITICAL alert
+- OOM killer in journald           → CRITICAL alert
+- Load average > 2× nb_cores for 5min → HIGH alert
+- CPU/GPU temperature > threshold  → HIGH alert
+- Process with memory leak (monotone RSS increase) → ALERT
 ```
-- RAM utilisée > 85% pendant > 30s        → ALERTE haute
-- Processus zombie (état Z) > 5 min       → ALERTE moyenne
-- Processus orphelin avec CPU > 0          → ALERTE moyenne
-- Même cmdline × N instances (N > seuil)  → ALERTE (cas MCP/Python)
-- Swap usage > 50%                         → ALERTE haute
-- Disque < 5% espace libre                → ALERTE critique
-- OOM killer dans journald                 → ALERTE critique
-- Load average > 2× nb_cores pendant 5min → ALERTE haute
-- Température CPU/GPU > seuil              → ALERTE haute
-- Processus avec memory leak (RSS croissant monotone sur fenêtre) → ALERTE
-```
 
-#### Niveau 2 — Analyse IA (Claude API, optionnel)
-Activé uniquement quand le Niveau 1 détecte une anomalie, pour :
-- Comprendre le contexte (pourquoi ces processus existent)
-- Proposer des actions de remédiation explicites
-- Prioriser les actions si multiples problèmes
-- Expliquer en langage naturel ce qui se passe
+#### Level 2 — AI Analysis (Claude API, optional)
+Activated only when Level 1 detects an anomaly, to:
+- Understand context (why these processes exist)
+- Propose explicit remediation actions
+- Prioritize actions if multiple problems
+- Explain in natural language what's happening
 
-**Prompt pattern envoyé à Claude :**
-```
-Système: Tu es un expert Linux sysadmin. Analyse cette situation et propose des actions.
+**Prompt pattern sent to Claude:**
+```text
+System: You are an expert Linux sysadmin. Analyze this situation and propose actions.
 
-Contexte système :
+System context:
 - RAM: {used}/{total} ({percent}%), swap: {swap_used}/{swap_total}
 - CPU load: {load_1m}/{load_5m}/{load_15m} ({n_cores} cores)
-- Top processus par RAM: [liste]
-- Top processus par CPU: [liste]
-- Processus suspects détectés: [liste avec raison]
-- Dernières entrées journald anormales: [liste]
+- Top processes by RAM: [list]
+- Top processes by CPU: [list]
+- Suspicious processes detected: [list with reason]
+- Recent abnormal journald entries: [list]
 
-Réponds en JSON structuré :
+Reply in structured JSON:
 {
-  "diagnostic": "explication claire du problème",
+  "diagnostic": "clear explanation of the problem",
   "severity": "critical|high|medium|low",
   "actions": [
     {
       "type": "kill_process|restart_service|free_cache|custom",
-      "target": "pid ou service",
-      "command": "commande exacte",
+      "target": "pid or service",
+      "command": "exact command",
       "risk": "safe|moderate|dangerous",
-      "explanation": "pourquoi cette action"
+      "explanation": "why this action"
     }
   ],
-  "prevention": "conseil pour éviter ce problème à l'avenir"
+  "prevention": "advice to prevent this problem in the future"
 }
 ```
 
 ### 3. Action Engine (`src/actions/`)
 
-Trois modes d'opération configurables :
+Three configurable operation modes:
 
-| Mode | Comportement |
-|------|-------------|
-| `observe` | Notifie seulement (défaut) |
-| `suggest` | Notifie + propose des commandes à copier/coller |
-| `auto` | Exécute automatiquement les actions "safe" |
+| Mode | Behavior |
+|------|----------|
+| `observe` | Notify only (default) |
+| `suggest` | Notify + propose commands to copy/paste |
+| `auto` | Automatically execute "safe" actions |
 
-**Canaux de notification :**
+**Notification channels:**
 - `notify-send` (desktop notifications)
-- Terminal (ANSI coloré dans stdout)
-- Fichier log structuré (JSON)
-- Webhook optionnel (Slack, Discord, etc.)
+- Terminal (ANSI colored output to stdout)
+- Structured log file (JSON)
+- Optional webhook (Slack, Discord, etc.)
 
 ### 4. State Store (`src/store/`)
 
-SQLite embarqué via `rusqlite` pour :
-- Historique des snapshots (rolling window de 24h)
-- Baseline apprise (moyennes/écarts-types par heure du jour)
-- Historique des alertes et actions
-- Configuration des seuils personnalisés
+Embedded SQLite via `rusqlite` for:
+- Snapshot history (24-hour rolling window)
+- Learned baseline (averages/standard deviations per hour of day)
+- Alert and action history
+- Custom threshold configuration
 
 ### 5. CLI (`src/cli/`)
 
 ```bash
-vigil                      # Lance le daemon (mode observe par défaut)
-vigil status               # Snapshot instantané du système
-vigil report               # Rapport détaillé des dernières 24h
-vigil watch                # Mode interactif (comme htop + IA)
-vigil explain <pid>        # Demande à l'IA d'expliquer un processus
-vigil kill <pid> [--force] # Kill avec confirmation et logging
-vigil config               # Éditer la configuration
-vigil health               # Self-check du daemon
+vigil                      # Launch daemon (observe mode by default)
+vigil status               # Instant system snapshot
+vigil report               # Detailed report of last 24h
+vigil watch                # Interactive mode (like htop + AI)
+vigil explain <pid>        # Ask AI to explain a process
+vigil kill <pid> [--force] # Kill with confirmation and logging
+vigil config               # Edit configuration
+vigil health               # Self-check of the daemon
 ```
 
 ---
 
-## Stack Technique
+## Technical Stack
 
-| Composant | Crate | Justification |
+| Component | Crate | Justification |
 |-----------|-------|---------------|
-| Async runtime | `tokio` | Standard pour daemon async |
-| System info | `sysinfo` | Cross-platform, API propre |
-| Proc filesystem | `procfs` | Accès détaillé Linux /proc |
-| Journal | `systemd-journal-logger` ou `journal-reader` | Lecture journald native |
-| GPU NVIDIA | `nvml-wrapper` | Bindings NVML safe |
+| Async runtime | `tokio` | Standard for async daemon |
+| System info | `sysinfo` | Cross-platform, clean API |
+| Proc filesystem | `procfs` | Detailed Linux /proc access |
+| Journal | `systemd-journal-logger` or `journal-reader` | Native journald reading |
+| NVIDIA GPU | `nvml-wrapper` | Safe NVML bindings |
 | CLI | `clap` | Standard, derive macros |
-| Config | `serde` + `toml` | Fichier config lisible |
+| Config | `serde` + `toml` | Readable config file |
 | DB | `rusqlite` | Embedded, zero setup |
-| HTTP client | `reqwest` | Pour API Claude |
-| Notifications | `notify-rust` | Desktop notifications Linux |
+| HTTP client | `reqwest` | For Claude API |
+| Notifications | `notify-rust` | Linux desktop notifications |
 | Logging | `tracing` + `tracing-subscriber` | Structured logging |
-| Errors | `anyhow` + `thiserror` | Per tes best practices |
-| TUI (optionnel) | `ratatui` | Pour mode `vigil watch` |
+| Errors | `anyhow` + `thiserror` | Per your best practices |
+| TUI (optional) | `ratatui` | For `vigil watch` mode |
 
 ---
 
@@ -177,14 +176,14 @@ vigil health               # Self-check du daemon
 ```toml
 [general]
 mode = "suggest"           # observe | suggest | auto
-interval_secs = 5          # fréquence de collecte
-language = "fr"            # langue des notifications
+interval_secs = 5          # collection frequency
+language = "en"            # notification language
 
 [thresholds]
 ram_warn_percent = 80
 ram_critical_percent = 90
 swap_warn_percent = 40
-cpu_load_factor = 2.0      # alerte si load > factor × n_cores
+cpu_load_factor = 2.0      # alert if load > factor × n_cores
 disk_min_free_percent = 10
 max_duplicate_processes = 5
 zombie_timeout_secs = 300
@@ -195,9 +194,9 @@ temperature_gpu_max = 80
 enabled = true
 provider = "anthropic"
 model = "claude-sonnet-4-20250514"
-api_key_env = "ANTHROPIC_API_KEY"  # lire depuis env var
+api_key_env = "ANTHROPIC_API_KEY"  # read from env var
 max_tokens = 1024
-cooldown_secs = 60         # min entre 2 appels IA
+cooldown_secs = 60         # minimum between 2 AI calls
 
 [notifications]
 desktop = true
@@ -206,76 +205,76 @@ log_file = "~/.local/share/vigil/vigil.log"
 # webhook_url = "https://hooks.slack.com/..."
 
 [allowlist]
-# Processus à ne jamais signaler
+# Processes to never report
 ignore_commands = ["Xorg", "systemd", "dbus-daemon"]
-# Processus à ne jamais tuer automatiquement
+# Processes to never kill automatically
 protected_pids = [1]
 protected_commands = ["sshd", "systemd", "dbus*"]
 
 [history]
-retention_hours = 168      # 7 jours
+retention_hours = 168      # 7 days
 snapshot_interval_secs = 60
 ```
 
 ---
 
-## Détection Spécifique : Cas "MCP Python Zombies"
+## Specific Detection: "MCP Python Zombies" Case
 
-Le scénario exact de Mathieu est couvert par cette règle composite :
+Mathieu's exact scenario is covered by this composite rule:
 
-```
+```text
 RULE: ghost_process_storm
 TRIGGERS WHEN:
-  1. N processus avec la même cmdline (ex: "python3 mcp_server.py")
-     ET N > max_duplicate_processes (défaut: 5)
-  2. OU processus orphelins (ppid=1 ou ppid=reaper) dont le parent
-     original était "claude-code" ou "node" (détecté via cmdline/cgroup)
-  3. ET ces processus consomment collectivement > X% RAM
+  1. N processes with same cmdline (ex: "python3 mcp_server.py")
+     AND N > max_duplicate_processes (default: 5)
+  2. OR orphaned processes (ppid=1 or ppid=reaper) whose original
+     parent was "claude-code" or "node" (detected via cmdline/cgroup)
+  3. AND these processes collectively consume > X% RAM
 
 ACTION:
-  - Notifier: "⚠️ {N} processus Python identiques détectés ({total_ram}MB).
-    Probablement des MCP servers non terminés par Claude Code."
-  - Proposer: kill groupé par PGID ou pattern cmdline
-  - Commande suggérée: `kill $(pgrep -f "mcp_server.py")`
+  - Notify: "⚠️ {N} identical Python processes detected ({total_ram}MB).
+    Probably MCP servers not terminated by Claude Code."
+  - Propose: grouped kill by PGID or cmdline pattern
+  - Suggested command: `kill $(pgrep -f "mcp_server.py")`
 ```
 
 ---
 
-## Plan de Développement (Sprints)
+## Development Plan (Sprints)
 
-### Sprint 1 — Foundation (Semaine 1-2)
-- [ ] Scaffolding projet Cargo workspace
-- [ ] Collectors : Process, Memory, CPU
-- [ ] Règles déterministes de base (RAM, CPU, zombies)
-- [ ] CLI basique (`vigil status`)
-- [ ] Notifications terminal
+### Sprint 1 — Foundation (Week 1-2)
+- [ ] Cargo workspace scaffolding
+- [ ] Collectors: Process, Memory, CPU
+- [ ] Basic deterministic rules (RAM, CPU, zombies)
+- [ ] Basic CLI (`vigil status`)
+- [ ] Terminal notifications
 
-### Sprint 2 — Intelligence (Semaine 3-4)
-- [ ] Intégration API Claude
-- [ ] Collector journald
-- [ ] Détection processus dupliqués (cas MCP)
+### Sprint 2 — Intelligence (Week 3-4)
+- [ ] Claude API integration
+- [ ] journald collector
+- [ ] Duplicate process detection (MCP case)
 - [ ] Desktop notifications
-- [ ] Configuration TOML
+- [ ] TOML configuration
 
-### Sprint 3 — Persistence & History (Semaine 5-6)
+### Sprint 3 — Persistence & History (Week 5-6)
 - [ ] SQLite state store
 - [ ] Baseline learning
-- [ ] `vigil report` avec historique
-- [ ] Collector Disk + GPU
+- [ ] `vigil report` with history
+- [ ] Disk + GPU collectors
 
-### Sprint 4 — UX Polish (Semaine 7-8)
-- [ ] Mode `vigil watch` (TUI ratatui)
+### Sprint 4 — UX Polish (Week 7-8)
+- [ ] `vigil watch` mode (TUI ratatui)
 - [ ] `vigil explain <pid>`
-- [ ] Mode auto-remediation (safe actions)
+- [ ] Auto-remediation mode (safe actions)
 - [ ] Webhook notifications
-- [ ] Tests d'intégration + packaging
+- [ ] Integration tests + packaging
 
 ---
 
-## Sécurité & Considérations
+## Security & Considerations
 
-- **Principe du moindre privilège** : tourne en userspace, pas root (sauf pour kill de processus d'autres users)
-- **API key** : jamais en clair dans la config, toujours via env var ou keyring
-- **Mode auto** : uniquement pour les actions classées "safe" (kill de ses propres processus)
-- **Rate limiting IA** : cooldown configurable pour éviter les coûts API
-- **Pas de telemetry** : 100% local, sauf les appels Claude opt-in
+- **Principle of Least Privilege**: runs in userspace, not root (except for killing other users' processes)
+- **API key**: never in plaintext in config, always via env var or keyring
+- **Auto mode**: only for actions classified "safe" (kill own processes)
+- **AI Rate Limiting**: configurable cooldown to avoid API costs
+- **No telemetry**: 100% local, except opt-in Claude calls

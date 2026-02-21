@@ -128,21 +128,21 @@ impl AiAnalyzer for ClaudeCliAnalyzer {
         }
 
         let prompt = format!(
-            "Explique le comportement de ce processus Linux :\n\
-            - Nom : {name}\n\
-            - Ligne de commande : {cmdline}\n\
-            - État : {state}\n\
-            - Mémoire RSS : {rss_mb} MB\n\
-            - Mémoire virtuelle : {vms_mb} MB\n\
-            - CPU : {cpu_percent}%\n\
-            - PID parent : {ppid}\n\
-            - Descripteurs de fichiers ouverts : {open_fds}\n\
-            - Utilisateur : {user}\n\
+            "Explain the behavior of this Linux process:\n\
+            - Name: {name}\n\
+            - Command line: {cmdline}\n\
+            - State: {state}\n\
+            - RSS Memory: {rss_mb} MB\n\
+            - Virtual Memory: {vms_mb} MB\n\
+            - CPU: {cpu_percent}%\n\
+            - Parent PID: {ppid}\n\
+            - Open file descriptors: {open_fds}\n\
+            - User: {user}\n\
             \n\
-            Explique en français :\n\
-            1. À quoi sert ce processus\n\
-            2. Si son comportement est normal\n\
-            3. Si sa consommation de ressources est attendue",
+            Explain:\n\
+            1. What this process does\n\
+            2. Whether its behavior is normal\n\
+            3. Whether its resource usage is expected",
             name = process.name,
             cmdline = process.cmdline,
             state = process.state,

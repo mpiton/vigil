@@ -48,7 +48,7 @@ impl Notifier for TerminalNotifier {
         };
 
         if show_actions && !alert.suggested_actions.is_empty() {
-            println!("\n{}", "Actions sugg\u{00e9}r\u{00e9}es :".cyan().bold());
+            println!("\n{}", "Suggested actions:".cyan().bold());
             for (i, action) in alert.suggested_actions.iter().enumerate() {
                 let risk = risk_badge(action.risk);
                 println!(
@@ -72,9 +72,9 @@ impl Notifier for TerminalNotifier {
         output: &str,
     ) -> Result<(), NotificationError> {
         let status = if success {
-            "\u{2713} R\u{00e9}ussi".green().bold().to_string()
+            "\u{2713} Succeeded".green().bold().to_string()
         } else {
-            "\u{2717} \u{00c9}chou\u{00e9}".red().bold().to_string()
+            "\u{2717} Failed".red().bold().to_string()
         };
         let risk = risk_badge(action.risk);
         println!(
@@ -98,21 +98,21 @@ impl Notifier for TerminalNotifier {
         println!("\n{}", separator.cyan());
         println!(
             "{}",
-            " \u{1f916} Analyse IA (Claude) ".on_cyan().black().bold()
+            " \u{1f916} AI Analysis (Claude) ".on_cyan().black().bold()
         );
         println!("{}", separator.cyan());
 
         if !diagnostic.summary.is_empty() {
-            println!("\n{}", "R\u{00e9}sum\u{00e9} :".cyan().bold());
+            println!("\n{}", "Summary:".cyan().bold());
             println!("  {}", sanitize(&diagnostic.summary));
         }
 
         if !diagnostic.details.is_empty() {
-            println!("\n{}", "D\u{00e9}tails :".cyan().bold());
+            println!("\n{}", "Details:".cyan().bold());
             println!("  {}", sanitize(&diagnostic.details));
         }
 
-        println!("\n{}", "S\u{00e9}v\u{00e9}rit\u{00e9} :".cyan().bold());
+        println!("\n{}", "Severity:".cyan().bold());
         println!(
             "  {} {}",
             severity_badge(diagnostic.severity),
@@ -120,7 +120,7 @@ impl Notifier for TerminalNotifier {
         );
 
         let confidence = diagnostic.confidence.clamp(0.0, 1.0);
-        println!("\n{}", "Confiance :".cyan().bold());
+        println!("\n{}", "Confidence:".cyan().bold());
         println!("  {:.0}%", confidence * 100.0);
 
         println!("{}\n", separator.cyan());
@@ -396,7 +396,7 @@ mod tests {
 
     #[test]
     fn sanitize_preserves_unicode() {
-        let input = "alerte: m\u{00e9}moire \u{00e9}lev\u{00e9}e \u{1f916}";
+        let input = "alert: high m\u{00e9}mory us\u{00e9} \u{1f916}";
         let result = sanitize(input);
         assert!(matches!(result, Cow::Borrowed(_)));
         assert_eq!(result, input);

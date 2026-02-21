@@ -16,7 +16,7 @@ use crate::application::services::monitor::MonitorService;
 ///
 /// Returns an error if the underlying monitoring service encounters a fatal error.
 pub async fn run_daemon(service: &MonitorService<'_>, interval_secs: u64) -> anyhow::Result<()> {
-    tracing::info!("Daemon démarré (intervalle : {interval_secs}s)");
+    tracing::info!("Daemon started (interval: {interval_secs}s)");
     let mut interval = tokio::time::interval(Duration::from_secs(interval_secs));
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
@@ -29,23 +29,23 @@ pub async fn run_daemon(service: &MonitorService<'_>, interval_secs: u64) -> any
                 match service.run_once().await {
                     Ok(result) => {
                         tracing::info!(
-                            "Cycle terminé : {} alerte(s), snapshot {}",
+                            "Cycle complete: {} alert(s), snapshot {}",
                             result.alerts_count,
                             if result.snapshot_saved {
-                                "sauvegardé"
+                                "saved"
                             } else {
-                                "échoué"
+                                "failed"
                             }
                         );
                     }
                     Err(e) => {
-                        tracing::error!("Erreur cycle monitoring : {e}");
+                        tracing::error!("Monitoring cycle error: {e}");
                     }
                 }
             }
             _ = &mut shutdown => {
-                tracing::info!("Signal d'arrêt reçu, fermeture propre...");
-                println!("\nArrêt de Vigil...");
+                tracing::info!("Shutdown signal received, graceful shutdown...");
+                println!("\nShutting down Vigil...");
                 break;
             }
         }

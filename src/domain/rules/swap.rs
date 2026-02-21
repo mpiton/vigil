@@ -23,10 +23,10 @@ impl Rule for SwapWarningRule {
                 severity: Severity::High,
                 rule: "swap_warning".to_string(),
                 title: format!(
-                    "Swap élevé : {:.1}% ({}/{} MB)",
+                    "High swap: {:.1}% ({}/{} MB)",
                     mem.swap_percent, mem.swap_used_mb, mem.swap_total_mb
                 ),
-                details: "Le système utilise beaucoup de swap, ce qui ralentit les performances."
+                details: "The system is using a lot of swap, which degrades performance."
                     .to_string(),
                 suggested_actions: vec![],
             }]

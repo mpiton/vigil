@@ -45,9 +45,9 @@ impl ActivePanel {
 impl fmt::Display for ActivePanel {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Dashboard => write!(f, "Tableau de bord"),
-            Self::Processes => write!(f, "Processus"),
-            Self::Alerts => write!(f, "Alertes"),
+            Self::Dashboard => write!(f, "Dashboard"),
+            Self::Processes => write!(f, "Processes"),
+            Self::Alerts => write!(f, "Alerts"),
         }
     }
 }
@@ -79,9 +79,9 @@ impl fmt::Display for SortColumn {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Pid => write!(f, "PID"),
-            Self::Name => write!(f, "Nom"),
+            Self::Name => write!(f, "Name"),
             Self::Cpu => write!(f, "CPU"),
-            Self::Memory => write!(f, "Mémoire"),
+            Self::Memory => write!(f, "Memory"),
         }
     }
 }
@@ -148,16 +148,16 @@ mod tests {
     }
 
     #[test]
-    fn active_panel_display_french() {
-        assert_eq!(ActivePanel::Dashboard.to_string(), "Tableau de bord");
-        assert_eq!(ActivePanel::Processes.to_string(), "Processus");
-        assert_eq!(ActivePanel::Alerts.to_string(), "Alertes");
+    fn active_panel_display_english() {
+        assert_eq!(ActivePanel::Dashboard.to_string(), "Dashboard");
+        assert_eq!(ActivePanel::Processes.to_string(), "Processes");
+        assert_eq!(ActivePanel::Alerts.to_string(), "Alerts");
     }
 
     #[test]
     fn sort_column_display() {
         assert_eq!(SortColumn::Cpu.to_string(), "CPU");
-        assert_eq!(SortColumn::Memory.to_string(), "Mémoire");
+        assert_eq!(SortColumn::Memory.to_string(), "Memory");
     }
 
     #[test]

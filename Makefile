@@ -10,22 +10,22 @@ build:
 
 install: build
 	@if [ "$$(id -u)" != "0" ]; then \
-		echo "Erreur : cette commande nécessite les droits root (sudo make install)"; \
+		echo "Error: this command requires root privileges (sudo make install)"; \
 		exit 1; \
 	fi
 	./contrib/install.sh
 
 uninstall:
 	@if [ "$$(id -u)" != "0" ]; then \
-		echo "Erreur : cette commande nécessite les droits root (sudo make uninstall)"; \
+		echo "Error: this command requires root privileges (sudo make uninstall)"; \
 		exit 1; \
 	fi
-	systemctl stop vigil.service 2>/dev/null || echo "Note : le service n'est pas actif"
-	systemctl disable vigil.service 2>/dev/null || echo "Note : le service n'est pas activé"
+	systemctl stop vigil.service 2>/dev/null || echo "Note: the service is not active"
+	systemctl disable vigil.service 2>/dev/null || echo "Note: the service is not enabled"
 	rm -f $(SYSTEMD_DIR)/vigil.service
 	rm -f $(INSTALL_DIR)/vigil
 	systemctl daemon-reload
-	@echo "Vigil a été désinstallé avec succès"
+	@echo "Vigil has been successfully uninstalled"
 
 test:
 	cargo test
@@ -40,12 +40,12 @@ clean:
 	cargo clean
 
 help:
-	@echo "Cibles disponibles :"
-	@echo "  build       - Compiler le projet en mode release"
-	@echo "  install     - Installer Vigil (nécessite sudo)"
-	@echo "  uninstall   - Désinstaller Vigil (nécessite sudo)"
-	@echo "  test        - Exécuter les tests"
-	@echo "  fmt         - Formater le code"
-	@echo "  lint        - Vérifier avec clippy"
-	@echo "  clean       - Nettoyer les artefacts de compilation"
-	@echo "  help        - Afficher cette aide"
+	@echo "Available targets:"
+	@echo "  build       - Build the project in release mode"
+	@echo "  install     - Install Vigil (requires sudo)"
+	@echo "  uninstall   - Uninstall Vigil (requires sudo)"
+	@echo "  test        - Run tests"
+	@echo "  fmt         - Format the code"
+	@echo "  lint        - Check with clippy"
+	@echo "  clean       - Clean build artifacts"
+	@echo "  help        - Display this help"

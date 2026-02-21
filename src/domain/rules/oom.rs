@@ -40,13 +40,10 @@ impl Rule for OomKillerRule {
             timestamp: snapshot.timestamp,
             severity: Severity::Critical,
             rule: "oom_killer".to_string(),
-            title: format!(
-                "OOM Killer actif — {} événement(s) récent(s)",
-                oom_entries.len()
-            ),
+            title: format!("OOM Killer active — {} recent event(s)", oom_entries.len()),
             details,
             suggested_actions: vec![SuggestedAction {
-                description: "Identifier le processus le plus gourmand".to_string(),
+                description: "Identify the most resource-hungry process".to_string(),
                 command: "ps aux --sort=-%mem | head -10".to_string(),
                 risk: ActionRisk::Safe,
             }],
@@ -192,6 +189,6 @@ mod tests {
         let thresholds = ThresholdSet::default();
         let alerts = rule.evaluate(&snapshot, &thresholds);
         assert_eq!(alerts.len(), 1);
-        assert!(alerts[0].title.contains("10 événement(s)"));
+        assert!(alerts[0].title.contains("10 recent event(s)"));
     }
 }

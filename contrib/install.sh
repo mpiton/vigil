@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Installation script for Vigil system guardian
-# User-facing text is in French
+# User-facing text is in English
 
 # Variables
 BINARY_NAME="vigil"
@@ -15,53 +15,53 @@ CONFIG_FILE="config.default.toml"
 
 # Check if running as root
 if [[ $EUID -ne 0 ]]; then
-    echo "Erreur : Ce script doit être exécuté en tant que root." >&2
+    echo "Error: This script must be run as root." >&2
     exit 1
 fi
 
 # Verify release binary exists
 if [[ ! -f "$BINARY_PATH" ]]; then
-    echo "Erreur : Le binaire $BINARY_PATH n'existe pas." >&2
-    echo "Veuillez compiler le projet avec : cargo build --release" >&2
+    echo "Error: Binary $BINARY_PATH does not exist." >&2
+    echo "Please build the project with: cargo build --release" >&2
     exit 1
 fi
 
 # Verify config template exists
 if [[ ! -f "$CONFIG_FILE" ]]; then
-    echo "Erreur : Le fichier de configuration $CONFIG_FILE n'existe pas." >&2
+    echo "Error: Configuration file $CONFIG_FILE does not exist." >&2
     exit 1
 fi
 
 # Copy binary
-echo "Installation du binaire..."
+echo "Installing binary..."
 install -m 0755 "$BINARY_PATH" "$INSTALL_DIR/$BINARY_NAME"
 
 # Copy service file
-echo "Installation du fichier de service systemd..."
+echo "Installing systemd service file..."
 install -m 0644 "$SERVICE_FILE" "$SYSTEMD_DIR/$BINARY_NAME.service"
 
 # Create config directory
-echo "Création du répertoire de configuration..."
+echo "Creating configuration directory..."
 mkdir -p "$CONFIG_DIR"
 
 # Copy config file if it doesn't already exist
 if [[ ! -f "$CONFIG_DIR/config.toml" ]]; then
-    echo "Installation du fichier de configuration..."
+    echo "Installing configuration file..."
     install -m 0640 "$CONFIG_FILE" "$CONFIG_DIR/config.toml"
 else
-    echo "Le fichier de configuration existe déjà, pas d'écrasement."
+    echo "Configuration file already exists, not overwriting."
 fi
 
 # Reload systemd
-echo "Rechargement de systemd..."
+echo "Reloading systemd..."
 systemctl daemon-reload
 
 # Success message
 echo ""
-echo "✓ Installation réussie !"
+echo "✓ Installation successful!"
 echo ""
-echo "Prochaines étapes :"
-echo "  1. Vérifier la configuration : sudo nano $CONFIG_DIR/config.toml"
-echo "  2. Activer le service : sudo systemctl enable $BINARY_NAME"
-echo "  3. Démarrer le service : sudo systemctl start $BINARY_NAME"
-echo "  4. Vérifier le statut : sudo systemctl status $BINARY_NAME"
+echo "Next steps:"
+echo "  1. Check the configuration: sudo nano $CONFIG_DIR/config.toml"
+echo "  2. Enable the service: sudo systemctl enable $BINARY_NAME"
+echo "  3. Start the service: sudo systemctl start $BINARY_NAME"
+echo "  4. Check the status: sudo systemctl status $BINARY_NAME"
