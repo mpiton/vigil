@@ -34,6 +34,9 @@ cargo build --release
 ### Systemd Service (recommended)
 
 ```bash
+# Build the release binary first
+make build
+
 # Install binary, service, and config
 sudo make install
 
