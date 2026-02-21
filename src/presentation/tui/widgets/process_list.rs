@@ -64,11 +64,11 @@ pub fn render_process_list(
 
     let headers = [
         header_label("PID", SortColumn::Pid, sort_column, sort_order),
-        header_label("Nom", SortColumn::Name, sort_column, sort_order),
+        header_label("Name", SortColumn::Name, sort_column, sort_order),
         header_label("CPU%", SortColumn::Cpu, sort_column, sort_order),
         header_label("MEM MB", SortColumn::Memory, sort_column, sort_order),
         "User".to_owned(),
-        "État".to_owned(),
+        "State".to_owned(),
     ];
 
     let header_cells: Vec<Cell> = headers
@@ -91,12 +91,12 @@ pub fn render_process_list(
             };
 
             let state_label = match p.state {
-                ProcessState::Running => "En cours",
-                ProcessState::Sleeping => "Veille",
+                ProcessState::Running => "Running",
+                ProcessState::Sleeping => "Sleeping",
                 ProcessState::Zombie => "Zombie",
-                ProcessState::Stopped => "Arrêté",
-                ProcessState::Dead => "Mort",
-                ProcessState::Unknown => "Inconnu",
+                ProcessState::Stopped => "Stopped",
+                ProcessState::Dead => "Dead",
+                ProcessState::Unknown => "Unknown",
             };
 
             let cells = vec![
@@ -137,7 +137,7 @@ pub fn render_process_list(
     };
 
     let block = Block::default()
-        .title("Processus")
+        .title("Processes")
         .borders(Borders::ALL)
         .border_style(Style::default().fg(border_color));
 

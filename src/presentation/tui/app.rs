@@ -212,13 +212,13 @@ impl<'a> App<'a> {
                 process_area,
             );
         } else {
-            let loading = Paragraph::new("Chargement des données...")
+            let loading = Paragraph::new("Loading data...")
                 .style(Style::default().fg(Color::DarkGray))
-                .block(Block::bordered().title("Tableau de bord"));
+                .block(Block::bordered().title("Dashboard"));
             frame.render_widget(loading, dashboard_area);
-            let loading_proc = Paragraph::new("Chargement des données...")
+            let loading_proc = Paragraph::new("Loading data...")
                 .style(Style::default().fg(Color::DarkGray))
-                .block(Block::bordered().title("Processus"));
+                .block(Block::bordered().title("Processes"));
             frame.render_widget(loading_proc, process_area);
         }
 
@@ -266,17 +266,17 @@ impl<'a> App<'a> {
 
         let bar = Line::from(vec![
             Span::styled(" q", key_style),
-            Span::raw(":quitter "),
+            Span::raw(":quit "),
             Span::styled("Tab", key_style),
             Span::raw(":panel "),
             Span::styled("j/k", key_style),
             Span::raw(":nav "),
             Span::styled("s", key_style),
-            Span::raw(":tri "),
+            Span::raw(":sort "),
             Span::styled("o", key_style),
-            Span::raw(":ordre "),
+            Span::raw(":order "),
             Span::styled("r", key_style),
-            Span::raw(":rafraîchir"),
+            Span::raw(":refresh"),
         ]);
 
         frame.render_widget(
@@ -289,10 +289,10 @@ impl<'a> App<'a> {
 /// Restore the terminal to its normal state.
 fn restore_terminal() {
     if let Err(e) = disable_raw_mode() {
-        eprintln!("Échec désactivation mode raw : {e}");
+        eprintln!("Failed to disable raw mode: {e}");
     }
     if let Err(e) = execute!(io::stdout(), LeaveAlternateScreen) {
-        eprintln!("Échec sortie écran alternatif : {e}");
+        eprintln!("Failed to leave alternate screen: {e}");
     }
 }
 
@@ -307,12 +307,12 @@ pub fn run_tui(
     _thresholds: &ThresholdSet,
     interval_secs: u64,
 ) -> anyhow::Result<()> {
-    enable_raw_mode().context("Échec activation mode raw")?;
+    enable_raw_mode().context("Failed to enable raw mode")?;
     let mut stdout = io::stdout();
     if let Err(e) = execute!(stdout, EnterAlternateScreen) {
         // Raw mode was enabled but alternate screen failed — restore before returning
         let _ = disable_raw_mode();
-        return Err(e).context("Échec écran alternatif");
+        return Err(e).context("Failed to enter alternate screen");
     }
 
     // Install panic hook so terminal is restored even on panic
@@ -323,7 +323,7 @@ pub fn run_tui(
     }));
 
     let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend).context("Échec création terminal")?;
+    let mut terminal = Terminal::new(backend).context("Failed to create terminal")?;
 
     let mut app = App::new(collector, alert_store, interval_secs);
     app.refresh_data();
@@ -462,8 +462,8 @@ mod tests {
             timestamp: Utc::now(),
             severity,
             rule: "test_rule".to_string(),
-            title: "Alerte test".to_string(),
-            details: "Détails".to_string(),
+            title: "Test alert".to_string(),
+            details: "Details".to_string(),
             suggested_actions: vec![],
         }
     }

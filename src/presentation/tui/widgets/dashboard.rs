@@ -92,11 +92,11 @@ pub fn render_dashboard(frame: &mut Frame, snapshot: &SystemSnapshot, area: Rect
 
     let load_line = Line::from(spans);
 
-    let load_paragraph = Paragraph::new(load_line).block(Block::bordered().title("Charge système"));
+    let load_paragraph = Paragraph::new(load_line).block(Block::bordered().title("System load"));
     frame.render_widget(load_paragraph, vertical_chunks[1]);
 
     // Bottom: Disk usage table
-    let header_cells = ["Point de montage", "Utilisé/Total", "Usage", "Système"]
+    let header_cells = ["Mount point", "Used/Total", "Usage", "Filesystem"]
         .iter()
         .map(|h| Cell::from(*h).style(Style::default().bold()));
     let header = Row::new(header_cells)
@@ -112,7 +112,7 @@ pub fn render_dashboard(frame: &mut Frame, snapshot: &SystemSnapshot, area: Rect
             let style = Style::default().fg(color);
             Row::new(vec![
                 Cell::from(disk.mount_point.clone()).style(style),
-                Cell::from(format!("{used_gb:.1}/{:.1} Go", disk.total_gb)).style(style),
+                Cell::from(format!("{used_gb:.1}/{:.1} GB", disk.total_gb)).style(style),
                 Cell::from(format!("{:.1}%", disk.usage_percent)).style(style),
                 Cell::from(disk.filesystem.clone()).style(style),
             ])
@@ -129,7 +129,7 @@ pub fn render_dashboard(frame: &mut Frame, snapshot: &SystemSnapshot, area: Rect
         ],
     )
     .header(header)
-    .block(Block::bordered().title("Disques"));
+    .block(Block::bordered().title("Disks"));
 
     frame.render_widget(disk_table, vertical_chunks[2]);
 }

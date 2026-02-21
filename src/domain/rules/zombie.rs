@@ -36,10 +36,7 @@ impl Rule for ZombieProcessRule {
             .iter()
             .filter(|z| z.ppid > 1 && seen_ppids.insert(z.ppid))
             .map(|z| SuggestedAction {
-                description: format!(
-                    "Signaler le parent (PID {}) pour récolter le zombie",
-                    z.ppid
-                ),
+                description: format!("Signal parent (PID {}) to reap zombie", z.ppid),
                 command: format!("kill -SIGCHLD {}", z.ppid),
                 risk: ActionRisk::Safe,
             })
@@ -49,7 +46,7 @@ impl Rule for ZombieProcessRule {
             timestamp: snapshot.timestamp,
             severity: Severity::Medium,
             rule: "zombie_processes".to_string(),
-            title: format!("{} processus zombie(s) détecté(s)", zombies.len()),
+            title: format!("{} zombie process(es) detected", zombies.len()),
             details,
             suggested_actions,
         }]
@@ -202,7 +199,7 @@ mod tests {
         let thresholds = ThresholdSet::default();
         let alerts = rule.evaluate(&snapshot, &thresholds);
         assert_eq!(alerts.len(), 1);
-        assert_eq!(alerts[0].title, "2 processus zombie(s) détecté(s)");
+        assert_eq!(alerts[0].title, "2 zombie process(es) detected");
         assert!(alerts[0].suggested_actions.is_empty());
     }
 

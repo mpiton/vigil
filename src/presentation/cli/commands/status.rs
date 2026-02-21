@@ -15,7 +15,7 @@ use crate::presentation::cli::formatters::table_fmt::format_process_table;
 pub fn run_status(collector: &dyn SystemCollector, json: bool) -> anyhow::Result<()> {
     let snapshot = collector
         .collect()
-        .context("Échec de la collecte des métriques système")?;
+        .context("Failed to collect system metrics")?;
 
     if json {
         println!("{}", serde_json::to_string_pretty(&snapshot)?);
@@ -27,14 +27,14 @@ pub fn run_status(collector: &dyn SystemCollector, json: bool) -> anyhow::Result
 
     // RAM
     let mem = &snapshot.memory;
-    print_section_header("\n💾 Mémoire RAM");
+    print_section_header("\n💾 RAM Memory");
     println!(
         "  {} {}",
         progress_bar(mem.usage_percent, 30),
         colorize_percent(mem.usage_percent)
     );
     println!(
-        "  Utilisé: {} Mo / {} Mo (Disponible: {} Mo)",
+        "  Used: {} MB / {} MB (Available: {} MB)",
         mem.used_mb, mem.total_mb, mem.available_mb
     );
 
@@ -46,10 +46,7 @@ pub fn run_status(collector: &dyn SystemCollector, json: bool) -> anyhow::Result
             progress_bar(mem.swap_percent, 30),
             colorize_percent(mem.swap_percent)
         );
-        println!(
-            "  Utilisé: {} Mo / {} Mo",
-            mem.swap_used_mb, mem.swap_total_mb
-        );
+        println!("  Used: {} MB / {} MB", mem.swap_used_mb, mem.swap_total_mb);
     }
 
     // CPU
@@ -60,17 +57,17 @@ pub fn run_status(collector: &dyn SystemCollector, json: bool) -> anyhow::Result
         cpu.load_avg_1m, cpu.load_avg_5m, cpu.load_avg_15m
     );
     println!(
-        "  Usage global: {} ({} cœurs)",
+        "  Global usage: {} ({} cores)",
         colorize_percent(f64::from(cpu.global_usage_percent)),
         cpu.core_count
     );
 
-    // Disques
+    // Disks
     if !snapshot.disks.is_empty() {
-        print_section_header("\n💿 Disques");
+        print_section_header("\n💿 Disks");
         for disk in &snapshot.disks {
             println!(
-                "  {} {} {} ({:.1} Go libre)",
+                "  {} {} {} ({:.1} GB free)",
                 disk.mount_point,
                 progress_bar(disk.usage_percent, 20),
                 colorize_percent(disk.usage_percent),
@@ -79,8 +76,8 @@ pub fn run_status(collector: &dyn SystemCollector, json: bool) -> anyhow::Result
         }
     }
 
-    // Top 5 processus
-    print_section_header("\n📊 Top 5 processus (RAM)");
+    // Top 5 processes
+    print_section_header("\n📊 Top 5 processes (RAM)");
     println!("{}", format_process_table(&snapshot.processes, 5));
 
     // Zombies
@@ -92,7 +89,7 @@ pub fn run_status(collector: &dyn SystemCollector, json: bool) -> anyhow::Result
     if !zombies.is_empty() {
         println!(
             "\n{}",
-            format!("🧟 {} processus zombie(s) détecté(s)", zombies.len())
+            format!("🧟 {} zombie process(es) detected", zombies.len())
                 .red()
                 .bold()
         );

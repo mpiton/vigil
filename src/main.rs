@@ -42,7 +42,7 @@ fn setup_tracing(verbose: bool) {
 fn open_store(config: &AppConfig) -> anyhow::Result<SqliteStore> {
     let store = SqliteStore::new(&config.database.path)?;
     if let Err(e) = store.cleanup_old(config.database.retention_hours) {
-        tracing::warn!("Échec nettoyage anciennes données : {e}");
+        tracing::warn!("Failed to clean old data: {e}");
     }
     Ok(store)
 }
@@ -60,7 +60,7 @@ fn resolve_mode(
             "suggest" => Ok(OperationMode::Suggest),
             "auto" => Ok(OperationMode::Auto),
             other => {
-                anyhow::bail!("Mode inconnu : '{other}'. Modes valides : observe, suggest, auto");
+                anyhow::bail!("Unknown mode: '{other}'. Valid modes: observe, suggest, auto");
             }
         }
     } else {
@@ -172,7 +172,7 @@ async fn main() -> anyhow::Result<()> {
             run_tui(&collector, &store, &thresholds, interval_secs)?;
         }
         Some(Commands::Config { .. }) => {
-            eprintln!("Commande config pas encore implémentée");
+            eprintln!("Config command not yet implemented");
         }
     }
 

@@ -70,7 +70,7 @@ impl Notifier {
         if !alert.suggested_actions.is_empty()
             && (self.mode == OperationMode::Suggest || self.mode == OperationMode::Auto)
         {
-            println!("\n{}", "Actions suggérées :".cyan().bold());
+            println!("\n{}", "Suggested actions:".cyan().bold());
             for (i, action) in alert.suggested_actions.iter().enumerate() {
                 let risk_badge = match action.risk {
                     ActionRisk::Safe => "[safe]".green().to_string(),
@@ -169,14 +169,14 @@ impl Notifier {
 
         let separator = "═".repeat(70);
         println!("\n{}", separator.cyan());
-        println!("{}", " 🤖 Analyse IA (Claude) ".on_cyan().black().bold());
+        println!("{}", " 🤖 AI Analysis (Claude) ".on_cyan().black().bold());
         println!("{}", separator.cyan());
 
-        println!("\n{}", "Diagnostic :".cyan().bold());
+        println!("\n{}", "Diagnostic:".cyan().bold());
         println!("  {}", diagnostic.diagnostic);
 
         if !diagnostic.actions.is_empty() {
-            println!("\n{}", "Actions recommandées :".cyan().bold());
+            println!("\n{}", "Recommended actions:".cyan().bold());
             for (i, action) in diagnostic.actions.iter().enumerate() {
                 let risk_badge = match action.risk.as_str() {
                     "safe" => "[safe]".green().to_string(),
@@ -197,7 +197,7 @@ impl Notifier {
         }
 
         if !diagnostic.prevention.is_empty() {
-            println!("\n{}", "Prévention :".cyan().bold());
+            println!("\n{}", "Prevention:".cyan().bold());
             println!("  {}", diagnostic.prevention);
         }
 

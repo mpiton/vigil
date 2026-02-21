@@ -41,7 +41,7 @@ pub fn render_alert_panel(
         Color::DarkGray
     };
     let block = Block::default()
-        .title("Alertes")
+        .title("Alerts")
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(border_color));
@@ -54,7 +54,7 @@ pub fn render_alert_panel(
 
     let items: Vec<ListItem<'_>> = if alerts.is_empty() {
         vec![ListItem::new(Line::from(Span::styled(
-            "Aucune alerte active",
+            "No active alerts",
             Style::default().fg(Color::Green),
         )))]
     } else {
@@ -102,7 +102,7 @@ mod tests {
             severity,
             rule: "test_rule".to_string(),
             title: title.to_string(),
-            details: "Détails du test".to_string(),
+            details: "Test details".to_string(),
             suggested_actions: vec![],
         }
     }
@@ -120,10 +120,10 @@ mod tests {
         let backend = TestBackend::new(80, 20);
         let mut terminal = Terminal::new(backend).expect("terminal");
         let alerts = vec![
-            make_alert(Severity::Critical, "CPU critique"),
-            make_alert(Severity::High, "Mémoire élevée"),
-            make_alert(Severity::Medium, "Swap utilisé"),
-            make_alert(Severity::Low, "Processus zombie"),
+            make_alert(Severity::Critical, "Critical CPU"),
+            make_alert(Severity::High, "High memory"),
+            make_alert(Severity::Medium, "Swap used"),
+            make_alert(Severity::Low, "Zombie process"),
         ];
         let mut list_state = ListState::default();
         list_state.select(Some(0));
@@ -174,8 +174,8 @@ mod tests {
     #[test]
     fn test_render_focused_vs_unfocused() {
         let alerts = vec![
-            make_alert(Severity::Critical, "CPU critique"),
-            make_alert(Severity::Low, "Alerte basse"),
+            make_alert(Severity::Critical, "Critical CPU"),
+            make_alert(Severity::Low, "Low alert"),
         ];
         let mut list_state = ListState::default();
 

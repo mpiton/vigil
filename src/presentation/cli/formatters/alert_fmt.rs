@@ -63,7 +63,7 @@ pub fn print_no_alerts() {
     println!();
     println!(
         "{}",
-        "✅ Système sain — aucune alerte détectée".green().bold()
+        "✅ System healthy — no alerts detected".green().bold()
     );
     println!();
 }

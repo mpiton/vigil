@@ -32,17 +32,17 @@ impl Rule for RamWarningRule {
                 severity: Severity::High,
                 rule: "ram_warning".to_string(),
                 title: format!(
-                    "RAM élevée : {:.1}% utilisée ({}/{} MB)",
+                    "High RAM: {:.1}% used ({}/{} MB)",
                     snapshot.memory.usage_percent,
                     snapshot.memory.used_mb,
                     snapshot.memory.total_mb
                 ),
                 details: format!(
-                    "Utilisation mémoire au-dessus du seuil d'alerte ({:.0}%)",
+                    "Memory usage above warning threshold ({:.0}%)",
                     thresholds.ram_warning
                 ),
                 suggested_actions: vec![SuggestedAction {
-                    description: "Libérer le cache mémoire".to_string(),
+                    description: "Free memory cache".to_string(),
                     command: "sync && echo 3 | sudo tee /proc/sys/vm/drop_caches".to_string(),
                     risk: ActionRisk::Safe,
                 }],
@@ -64,7 +64,7 @@ impl Rule for RamCriticalRule {
         if snapshot.memory.usage_percent >= thresholds.ram_critical {
             let top = top_processes_by_ram(snapshot, 5);
 
-            let mut details = String::from("Top consommateurs RAM :\n");
+            let mut details = String::from("Top RAM consumers:\n");
             for p in &top {
                 let _ = writeln!(
                     details,
@@ -77,7 +77,7 @@ impl Rule for RamCriticalRule {
                 .iter()
                 .filter(|p| p.pid > 1)
                 .map(|p| SuggestedAction {
-                    description: format!("Terminer {} (PID {})", p.name, p.pid),
+                    description: format!("Terminate {} (PID {})", p.name, p.pid),
                     command: format!("kill {}", p.pid),
                     risk: ActionRisk::Moderate,
                 })
@@ -88,7 +88,7 @@ impl Rule for RamCriticalRule {
                 severity: Severity::Critical,
                 rule: "ram_critical".to_string(),
                 title: format!(
-                    "RAM critique : {:.1}% utilisée ({}/{} MB)",
+                    "Critical RAM: {:.1}% used ({}/{} MB)",
                     snapshot.memory.usage_percent,
                     snapshot.memory.used_mb,
                     snapshot.memory.total_mb

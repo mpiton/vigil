@@ -57,17 +57,17 @@ impl WebhookNotifier {
                 drop(handle.spawn(async move {
                     match client.post(&url).json(&payload).send().await {
                         Ok(resp) if !resp.status().is_success() => {
-                            tracing::error!("Webhook {host} a répondu HTTP {}", resp.status());
+                            tracing::error!("Webhook {host} responded HTTP {}", resp.status());
                         }
                         Err(e) => {
-                            tracing::error!("Échec envoi webhook {host}: {e}");
+                            tracing::error!("Webhook send failed {host}: {e}");
                         }
                         Ok(_) => {}
                     }
                 }));
             }
             Err(_) => {
-                tracing::warn!("Notification webhook ignorée : pas de runtime tokio disponible");
+                tracing::warn!("Webhook notification skipped: no tokio runtime available");
             }
         }
     }
@@ -204,12 +204,12 @@ fn build_slack_alert(alert: &Alert) -> serde_json::Value {
             .iter()
             .map(|a| format!("• `{}` — {} [{}]", a.command, a.description, a.risk))
             .collect();
-        format!("\n*Actions recommandées :*\n{}", items.join("\n"))
+        format!("\n*Recommended actions:*\n{}", items.join("\n"))
     };
 
     let body = truncate(
         &format!(
-            "*Règle :* {}\n*Titre :* {}\n*Détails :* {}{}",
+            "*Rule:* {}\n*Title:* {}\n*Details:* {}{}",
             alert.rule, alert.title, alert.details, actions_text
         ),
         2900,
@@ -224,7 +224,7 @@ fn build_slack_alert(alert: &Alert) -> serde_json::Value {
                     "type": "header",
                     "text": {
                         "type": "plain_text",
-                        "text": format!("{} Vigil — Alerte {}", alert.severity.emoji(), alert.severity)
+                        "text": format!("{} Vigil — Alert {}", alert.severity.emoji(), alert.severity)
                     }
                 },
                 {
@@ -241,7 +241,7 @@ fn build_slack_alert(alert: &Alert) -> serde_json::Value {
 
 fn build_slack_diagnostic(diagnostic: &AiDiagnostic) -> serde_json::Value {
     serde_json::json!({
-        "text": format!("Vigil IA — {} {}", diagnostic.severity.emoji(), diagnostic.summary),
+        "text": format!("Vigil AI — {} {}", diagnostic.severity.emoji(), diagnostic.summary),
         "attachments": [{
             "color": severity_color_hex(diagnostic.severity),
             "blocks": [
@@ -249,7 +249,7 @@ fn build_slack_diagnostic(diagnostic: &AiDiagnostic) -> serde_json::Value {
                     "type": "header",
                     "text": {
                         "type": "plain_text",
-                        "text": format!("{} Vigil — Diagnostic IA", diagnostic.severity.emoji())
+                        "text": format!("{} Vigil — AI Diagnostic", diagnostic.severity.emoji())
                     }
                 },
                 {
@@ -257,7 +257,7 @@ fn build_slack_diagnostic(diagnostic: &AiDiagnostic) -> serde_json::Value {
                     "text": {
                         "type": "mrkdwn",
                         "text": format!(
-                            "*Résumé :* {}\n*Détails :* {}\n*Sévérité :* {} | *Confiance :* {:.0}%",
+                            "*Summary:* {}\n*Details:* {}\n*Severity:* {} | *Confidence:* {:.0}%",
                             diagnostic.summary, diagnostic.details,
                             diagnostic.severity, diagnostic.confidence * 100.0
                         )
@@ -270,9 +270,9 @@ fn build_slack_diagnostic(diagnostic: &AiDiagnostic) -> serde_json::Value {
 
 fn build_slack_action(action: &SuggestedAction, success: bool, output: &str) -> serde_json::Value {
     let status = if success {
-        "✅ Réussi"
+        "✅ Succeeded"
     } else {
-        "❌ Échoué"
+        "❌ Failed"
     };
     let output_text = if output.is_empty() {
         String::new()
@@ -283,7 +283,7 @@ fn build_slack_action(action: &SuggestedAction, success: bool, output: &str) -> 
     };
 
     serde_json::json!({
-        "text": format!("Vigil — Action : {} ({})", action.description, status),
+        "text": format!("Vigil — Action: {} ({})", action.description, status),
         "attachments": [{
             "color": if success { "#2ECC71" } else { "#E74C3C" },
             "blocks": [{
@@ -291,7 +291,7 @@ fn build_slack_action(action: &SuggestedAction, success: bool, output: &str) -> 
                 "text": {
                     "type": "mrkdwn",
                     "text": format!(
-                        "*Action :* {}\n*Commande :* `{}`\n*Risque :* {}\n*Résultat :* {}{}",
+                        "*Action:* {}\n*Command:* `{}`\n*Risk:* {}\n*Result:* {}{}",
                         action.description, action.command, action.risk, status, output_text
                     )
                 }
@@ -304,8 +304,8 @@ fn build_slack_action(action: &SuggestedAction, success: bool, output: &str) -> 
 
 fn build_discord_alert(alert: &Alert) -> serde_json::Value {
     let mut fields = vec![
-        serde_json::json!({"name": "Sévérité", "value": format!("{}", alert.severity), "inline": true}),
-        serde_json::json!({"name": "Règle", "value": &alert.rule, "inline": true}),
+        serde_json::json!({"name": "Severity", "value": format!("{}", alert.severity), "inline": true}),
+        serde_json::json!({"name": "Rule", "value": &alert.rule, "inline": true}),
     ];
 
     for action in &alert.suggested_actions {
@@ -318,12 +318,12 @@ fn build_discord_alert(alert: &Alert) -> serde_json::Value {
 
     serde_json::json!({
         "embeds": [{
-            "title": format!("{} Vigil — Alerte", alert.severity.emoji()),
+            "title": format!("{} Vigil — Alert", alert.severity.emoji()),
             "description": truncate(&format!("**{}**\n{}", alert.title, alert.details), 4096),
             "color": severity_color_decimal(alert.severity),
             "timestamp": alert.timestamp.to_rfc3339(),
             "fields": fields,
-            "footer": {"text": "Vigil — Gardien système"}
+            "footer": {"text": "Vigil — System Guardian"}
         }]
     })
 }
@@ -331,15 +331,15 @@ fn build_discord_alert(alert: &Alert) -> serde_json::Value {
 fn build_discord_diagnostic(diagnostic: &AiDiagnostic) -> serde_json::Value {
     serde_json::json!({
         "embeds": [{
-            "title": format!("{} Vigil — Diagnostic IA", diagnostic.severity.emoji()),
+            "title": format!("{} Vigil — AI Diagnostic", diagnostic.severity.emoji()),
             "description": truncate(&format!("**{}**\n{}", diagnostic.summary, diagnostic.details), 4096),
             "color": severity_color_decimal(diagnostic.severity),
             "timestamp": diagnostic.timestamp.to_rfc3339(),
             "fields": [
-                {"name": "Sévérité", "value": format!("{}", diagnostic.severity), "inline": true},
-                {"name": "Confiance", "value": format!("{:.0}%", diagnostic.confidence * 100.0), "inline": true}
+                {"name": "Severity", "value": format!("{}", diagnostic.severity), "inline": true},
+                {"name": "Confidence", "value": format!("{:.0}%", diagnostic.confidence * 100.0), "inline": true}
             ],
-            "footer": {"text": "Vigil — Gardien système"}
+            "footer": {"text": "Vigil — System Guardian"}
         }]
     })
 }
@@ -350,9 +350,9 @@ fn build_discord_action(
     output: &str,
 ) -> serde_json::Value {
     let status = if success {
-        "✅ Réussi"
+        "✅ Succeeded"
     } else {
-        "❌ Échoué"
+        "❌ Failed"
     };
     let description = if output.is_empty() {
         action.description.clone()
@@ -364,15 +364,15 @@ fn build_discord_action(
 
     serde_json::json!({
         "embeds": [{
-            "title": "Vigil — Action exécutée",
+            "title": "Vigil — Action executed",
             "description": description,
             "color": if success { 0x00_2E_CC_71_u64 } else { 0x00_E7_4C_3C_u64 },
             "fields": [
-                {"name": "Commande", "value": format!("`{}`", action.command), "inline": true},
-                {"name": "Risque", "value": format!("{}", action.risk), "inline": true},
-                {"name": "Résultat", "value": status, "inline": true}
+                {"name": "Command", "value": format!("`{}`", action.command), "inline": true},
+                {"name": "Risk", "value": format!("{}", action.risk), "inline": true},
+                {"name": "Result", "value": status, "inline": true}
             ],
-            "footer": {"text": "Vigil — Gardien système"}
+            "footer": {"text": "Vigil — System Guardian"}
         }]
     })
 }
@@ -570,7 +570,7 @@ mod tests {
         let text = payload["attachments"][0]["blocks"][1]["text"]["text"]
             .as_str()
             .unwrap_or_default();
-        assert!(!text.contains("Actions recommandées"));
+        assert!(!text.contains("Recommended actions"));
     }
 
     #[test]
@@ -588,7 +588,7 @@ mod tests {
         let text = payload["attachments"][0]["blocks"][0]["text"]["text"]
             .as_str()
             .unwrap_or_default();
-        assert!(text.contains("Réussi"));
+        assert!(text.contains("Succeeded"));
     }
 
     #[test]
@@ -598,7 +598,7 @@ mod tests {
         let text = payload["attachments"][0]["blocks"][0]["text"]["text"]
             .as_str()
             .unwrap_or_default();
-        assert!(text.contains("Échoué"));
+        assert!(text.contains("Failed"));
     }
 
     // --- Discord payload structure ---

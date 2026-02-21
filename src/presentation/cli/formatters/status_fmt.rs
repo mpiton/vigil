@@ -120,6 +120,6 @@ mod tests {
     fn print_section_header_does_not_panic() {
         disable_colors();
         print_section_header("Test Header");
-        print_section_header("💾 Mémoire RAM");
+        print_section_header("💾 RAM Memory");
     }
 }

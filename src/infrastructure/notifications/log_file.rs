@@ -25,29 +25,21 @@ impl LogFileNotifier {
     fn append_json_line(&self, value: &serde_json::Value) -> Result<(), NotificationError> {
         if let Some(parent) = self.path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| {
-                NotificationError::SendFailed(format!(
-                    "impossible de creer le repertoire parent: {e}"
-                ))
+                NotificationError::SendFailed(format!("failed to create parent directory: {e}"))
             })?;
         }
 
-        let json = serde_json::to_string(value).map_err(|e| {
-            NotificationError::SendFailed(format!("erreur de serialisation JSON: {e}"))
-        })?;
+        let json = serde_json::to_string(value)
+            .map_err(|e| NotificationError::SendFailed(format!("JSON serialization error: {e}")))?;
 
         let mut file = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
             .open(&self.path)
-            .map_err(|e| {
-                NotificationError::SendFailed(format!("impossible d'ouvrir le fichier de log: {e}"))
-            })?;
+            .map_err(|e| NotificationError::SendFailed(format!("failed to open log file: {e}")))?;
 
-        writeln!(file, "{json}").map_err(|e| {
-            NotificationError::SendFailed(format!(
-                "impossible d'ecrire dans le fichier de log: {e}"
-            ))
-        })
+        writeln!(file, "{json}")
+            .map_err(|e| NotificationError::SendFailed(format!("failed to write to log file: {e}")))
     }
 }
 
@@ -123,15 +115,15 @@ mod tests {
             timestamp: Utc::now(),
             severity,
             rule: "test_rule".to_string(),
-            title: "Titre test".to_string(),
-            details: "Details du test".to_string(),
+            title: "Test title".to_string(),
+            details: "Test details".to_string(),
             suggested_actions: actions,
         }
     }
 
     fn make_action(risk: ActionRisk) -> SuggestedAction {
         SuggestedAction {
-            description: "Action de test".to_string(),
+            description: "Test action".to_string(),
             command: "echo test".to_string(),
             risk,
         }
@@ -140,8 +132,8 @@ mod tests {
     fn make_diagnostic() -> AiDiagnostic {
         AiDiagnostic {
             timestamp: Utc::now(),
-            summary: "Diagnostic AI".to_string(),
-            details: "Details du diagnostic".to_string(),
+            summary: "AI Diagnostic".to_string(),
+            details: "Diagnostic details".to_string(),
             severity: Severity::Medium,
             confidence: 0.85,
             suggested_actions: vec![],
@@ -180,9 +172,9 @@ mod tests {
 
         assert_eq!(parsed["severity"], "High");
         assert_eq!(parsed["rule"], "test_rule");
-        assert_eq!(parsed["title"], "Titre test");
-        assert_eq!(parsed["details"], "Details du test");
-        assert_eq!(parsed["actions"][0]["description"], "Action de test");
+        assert_eq!(parsed["title"], "Test title");
+        assert_eq!(parsed["details"], "Test details");
+        assert_eq!(parsed["actions"][0]["description"], "Test action");
         assert_eq!(parsed["actions"][0]["command"], "echo test");
         assert_eq!(parsed["actions"][0]["risk"], "safe");
     }
@@ -203,8 +195,8 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(content.trim()).expect("parse JSON");
 
         assert_eq!(parsed["severity"], "Medium");
-        assert_eq!(parsed["summary"], "Diagnostic AI");
-        assert_eq!(parsed["details"], "Details du diagnostic");
+        assert_eq!(parsed["summary"], "AI Diagnostic");
+        assert_eq!(parsed["details"], "Diagnostic details");
         assert_eq!(parsed["confidence"], 0.85);
     }
 
@@ -331,7 +323,7 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(content.trim()).expect("parse JSON");
 
         assert_eq!(parsed["type"], "action_executed");
-        assert_eq!(parsed["description"], "Action de test");
+        assert_eq!(parsed["description"], "Test action");
         assert_eq!(parsed["command"], "echo test");
         assert_eq!(parsed["risk"], "safe");
         assert!(parsed["success"].as_bool().expect("success bool"));

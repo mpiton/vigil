@@ -81,36 +81,36 @@ impl<'a> MonitorService<'a> {
         let snapshot_saved = match self.snapshot_store.save_snapshot(&snapshot) {
             Ok(()) => true,
             Err(e) => {
-                tracing::warn!("Échec sauvegarde snapshot : {e}");
+                tracing::warn!("Failed to save snapshot: {e}");
                 false
             }
         };
 
         if snapshot_saved {
             if let Err(e) = update_baselines(self.baseline_store, &snapshot) {
-                tracing::warn!("Échec mise à jour baselines : {e}");
+                tracing::warn!("Failed to update baselines: {e}");
             }
         }
 
         let alerts = self.rule_engine.analyze(&snapshot, self.thresholds);
 
         if alerts.is_empty() {
-            tracing::debug!("Système OK — aucune alerte");
+            tracing::debug!("System OK — no alerts");
         }
 
         if !alerts.is_empty() {
-            tracing::warn!("{} alerte(s) détectée(s)", alerts.len());
+            tracing::warn!("{} alert(s) detected", alerts.len());
         }
 
         for alert in &alerts {
             if let Err(e) = self.alert_store.save_alert(alert) {
-                tracing::warn!("Échec sauvegarde alerte : {e}");
+                tracing::warn!("Failed to save alert: {e}");
             }
         }
 
         for alert in &alerts {
             if let Err(e) = self.notifier.notify(alert) {
-                tracing::warn!("Échec notification alerte : {e}");
+                tracing::warn!("Alert notification failed: {e}");
             }
         }
 
@@ -125,7 +125,7 @@ impl<'a> MonitorService<'a> {
                         }
                     } else {
                         tracing::debug!(
-                            "Action ignorée (risque {:?}) : {}",
+                            "Action skipped (risk {:?}): {}",
                             action.risk,
                             action.description
                         );
@@ -139,7 +139,7 @@ impl<'a> MonitorService<'a> {
             match self.analyzer.analyze(&snapshot, &alerts).await {
                 Ok(Some(diag)) => {
                     if let Err(e) = self.notifier.notify_ai_diagnostic(&diag) {
-                        tracing::warn!("Échec notification diagnostic IA : {e}");
+                        tracing::warn!("AI diagnostic notification failed: {e}");
                     }
                     // Auto-execute safe actions suggested by AI
                     if self.operation_mode == OperationMode::Auto {
@@ -150,7 +150,7 @@ impl<'a> MonitorService<'a> {
                                 }
                             } else {
                                 tracing::debug!(
-                                    "Action IA ignorée (risque {:?}) : {}",
+                                    "AI action skipped (risk {:?}): {}",
                                     action.risk,
                                     action.description
                                 );
@@ -160,7 +160,7 @@ impl<'a> MonitorService<'a> {
                 }
                 Ok(None) => {}
                 Err(e) => {
-                    tracing::warn!("Analyse IA échouée : {e}");
+                    tracing::warn!("AI analysis failed: {e}");
                 }
             }
         }
@@ -176,16 +176,16 @@ impl<'a> MonitorService<'a> {
     /// Returns `true` if the command executed successfully.
     async fn execute_action(&self, action: &SuggestedAction) -> bool {
         if contains_shell_metacharacters(&action.command) {
-            tracing::warn!("Action bloquée (métacaractères shell) : {}", action.command);
+            tracing::warn!("Action blocked (shell metacharacters): {}", action.command);
             return false;
         }
 
         if is_command_protected(&action.command, self.protected_commands) {
-            tracing::warn!("Action bloquée (processus protégé) : {}", action.command);
+            tracing::warn!("Action blocked (protected process): {}", action.command);
             return false;
         }
 
-        tracing::info!("Auto-exécution : {}", action.description);
+        tracing::info!("Auto-executing: {}", action.description);
 
         let timeout = std::time::Duration::from_secs(30);
         let (success, output_str) = match tokio::time::timeout(
@@ -205,7 +205,7 @@ impl<'a> MonitorService<'a> {
                 let combined = truncate_output(combined.trim());
                 (output.status.success(), combined)
             }
-            Ok(Err(e)) => (false, format!("Erreur lancement : {e}")),
+            Ok(Err(e)) => (false, format!("Launch error: {e}")),
             Err(_) => (false, "Timeout (30s)".to_string()),
         };
 
@@ -218,7 +218,7 @@ impl<'a> MonitorService<'a> {
             risk: action.risk,
         };
         if let Err(e) = self.action_log_store.log_action(&record) {
-            tracing::warn!("Échec journalisation action : {e}");
+            tracing::warn!("Failed to log action: {e}");
         }
 
         // Notify user of action execution
@@ -226,13 +226,13 @@ impl<'a> MonitorService<'a> {
             .notifier
             .notify_action_executed(action, success, &output_str)
         {
-            tracing::warn!("Échec notification action : {e}");
+            tracing::warn!("Action notification failed: {e}");
         }
 
         if success {
-            tracing::info!("Commande réussie : {}", action.command);
+            tracing::info!("Command succeeded: {}", action.command);
         } else {
-            tracing::warn!("Commande échouée : {}", action.command);
+            tracing::warn!("Command failed: {}", action.command);
         }
 
         success
@@ -274,7 +274,7 @@ fn truncate_output(s: &str) -> String {
         s.to_owned()
     } else {
         let mut result: String = s.chars().take(MAX_OUTPUT_CHARS).collect();
-        result.push_str("... [tronqué]");
+        result.push_str("... [truncated]");
         result
     }
 }
@@ -1460,7 +1460,7 @@ mod tests {
         let long = "x".repeat(3000);
         let result = truncate_output(&long);
         assert!(result.len() < 3000);
-        assert!(result.ends_with("... [tronqué]"));
+        assert!(result.ends_with("... [truncated]"));
     }
 
     #[test]

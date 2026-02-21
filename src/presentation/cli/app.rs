@@ -53,14 +53,14 @@ pub enum Commands {
         json: bool,
     },
 
-    /// Générer un rapport des dernières heures
+    /// Generate a report for the last hours
     #[command(alias = "r")]
     Report {
-        /// Fenêtre temporelle en heures (défaut : 24)
+        /// Time window in hours (default: 24)
         #[arg(long, default_value = "24")]
         hours: u64,
 
-        /// Sortie au format JSON
+        /// Output in JSON format
         #[arg(long)]
         json: bool,
     },
@@ -83,10 +83,10 @@ pub enum Commands {
         force: bool,
     },
 
-    /// Lancer le tableau de bord interactif
+    /// Launch interactive dashboard
     #[command(alias = "w")]
     Watch {
-        /// Intervalle de rafraîchissement en secondes (défaut : config)
+        /// Refresh interval in seconds (default: config)
         #[arg(short, long)]
         interval: Option<u64>,
     },

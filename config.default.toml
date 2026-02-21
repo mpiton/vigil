@@ -1,16 +1,16 @@
-# Vigil — Configuration de référence
-# Copier vers ~/.config/vigil/config.toml pour personnaliser
+# Vigil — Reference configuration
+# Copy to ~/.config/vigil/config.toml to customize
 
 [general]
 mode = "suggest"           # observe | suggest | auto
-interval_secs = 5          # Intervalle de collecte en secondes
-language = "fr"            # Langue des messages
+interval_secs = 5          # Collection interval in seconds
+language = "en"            # Message language
 
 [thresholds]
 ram_warn_percent = 80.0
 ram_critical_percent = 90.0
 swap_warn_percent = 40.0
-cpu_load_factor = 2.0      # Facteur x nombre de coeurs
+cpu_load_factor = 2.0      # Factor x number of cores
 disk_min_free_percent = 10.0
 max_duplicate_processes = 5
 zombie_timeout_secs = 300
@@ -22,7 +22,7 @@ enabled = true
 provider = "claude-cli"    # claude-cli | ollama | noop
 model = "claude-sonnet-4-20250514"
 cooldown_secs = 60
-# ollama_url = "http://localhost:11434"  # Décommenter pour ollama
+# ollama_url = "http://localhost:11434"  # Uncomment for ollama
 
 [notifications]
 desktop = true

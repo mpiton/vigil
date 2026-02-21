@@ -51,7 +51,7 @@ async fn main() -> Result<()> {
 async fn run_daemon(config: Config) -> Result<()> {
     print_banner();
     tracing::info!(
-        "Vigil démarré en mode {:?}, intervalle: {}s",
+        "Vigil started in mode {:?}, interval: {}s",
         config.general.mode,
         config.general.interval_secs
     );
@@ -69,13 +69,13 @@ async fn run_daemon(config: Config) -> Result<()> {
 
                 if alerts.is_empty() {
                     tracing::debug!(
-                        "Système OK — RAM: {:.1}%, CPU load: {:.2}, {} processus",
+                        "System OK — RAM: {:.1}%, CPU load: {:.2}, {} processes",
                         snapshot.memory.usage_percent,
                         snapshot.cpu.load_avg_1m,
                         snapshot.processes.len()
                     );
                 } else {
-                    tracing::warn!("{} alerte(s) détectée(s)", alerts.len());
+                    tracing::warn!("{} alert(s) detected", alerts.len());
 
                     for alert in &alerts {
                         if let Err(e) = notifier.notify(alert) {
@@ -98,7 +98,7 @@ async fn run_daemon(config: Config) -> Result<()> {
                                     for action in &diagnostic.actions {
                                         if action.risk == "safe" {
                                             tracing::info!(
-                                                "Auto-exécution: {}",
+                                                "Auto-executing: {}",
                                                 action.command
                                             );
                                             execute_command(&action.command);
@@ -198,7 +198,7 @@ fn run_status(json: bool) -> Result<()> {
     }
 
     // Top 5 processes by RAM
-    println!("\n  {}", "Top processus (RAM):".bold());
+    println!("\n  {}", "Top processes (RAM):".bold());
     let mut procs = snapshot.processes.clone();
     procs.sort_by(|a, b| b.rss_mb.cmp(&a.rss_mb));
     for p in procs.iter().take(5) {
@@ -219,7 +219,7 @@ fn run_status(json: bool) -> Result<()> {
         .collect();
     if !zombies.is_empty() {
         println!(
-            "\n  {} {} processus zombie(s)",
+            "\n  {} {} zombie process(es)",
             "⚠️".yellow(),
             zombies.len()
         );
@@ -248,7 +248,7 @@ async fn run_scan(config: Config, use_ai: bool, json: bool) -> Result<()> {
 
     if alerts.is_empty() {
         println!(
-            "\n{} Aucune anomalie détectée. Système en bon état.\n",
+            "\n{} No anomalies detected. System healthy.\n",
             "✅".green()
         );
     } else {
@@ -261,8 +261,8 @@ async fn run_scan(config: Config, use_ai: bool, json: bool) -> Result<()> {
             let mut ai = AiAnalyzer::new(config.ai.clone());
             match ai.analyze(&snapshot, &alerts).await {
                 Ok(Some(diagnostic)) => notifier.notify_ai_diagnostic(&diagnostic),
-                Ok(None) => println!("{}", "IA non disponible (cooldown ou désactivée)".dimmed()),
-                Err(e) => println!("{} Erreur IA: {}", "⚠️".yellow(), e),
+                Ok(None) => println!("{}", "AI not available (cooldown or disabled)".dimmed()),
+                Err(e) => println!("{} AI Error: {}", "⚠️".yellow(), e),
             }
         }
     }
@@ -283,27 +283,27 @@ async fn run_explain(config: Config, pid: u32) -> Result<()> {
         .context(format!("Process {} not found", pid))?;
 
     println!(
-        "\n{} Processus PID {}",
+        "\n{} Process PID {}",
         "🔍".bold(),
         pid.to_string().bold()
     );
-    println!("  Nom:     {}", process.name);
+    println!("  Name:    {}", process.name);
     println!("  Cmdline: {}", process.cmdline);
-    println!("  État:    {}", process.state);
+    println!("  State:   {}", process.state);
     println!("  RAM:     {} MB", process.rss_mb);
     println!("  CPU:     {:.1}%", process.cpu_percent);
     println!("  Parent:  PID {}", process.ppid);
     println!("  FDs:     {}", process.open_fds);
 
     if config.ai.enabled {
-        println!("\n{}", "Analyse IA en cours...".dimmed());
+        println!("\n{}", "Running AI analysis...".dimmed());
         let api_key = std::env::var(&config.ai.api_key_env)
             .context("ANTHROPIC_API_KEY not set")?;
 
         let prompt = format!(
-            "Explique ce processus Linux de manière concise :\n\
-             - PID: {}\n- Nom: {}\n- Cmdline: {}\n- État: {}\n- RAM: {} MB\n- CPU: {:.1}%\n- Parent PID: {}\n- FDs ouverts: {}\n\n\
-             Est-ce un processus légitime ? Peut-il être tué sans risque ?",
+            "Explain this Linux process concisely:\n\
+             - PID: {}\n- Name: {}\n- Cmdline: {}\n- State: {}\n- RAM: {} MB\n- CPU: {:.1}%\n- Parent PID: {}\n- Open FDs: {}\n\n\
+             Is this a legitimate process? Can it be safely killed?",
             process.pid,
             process.name,
             process.cmdline,
@@ -319,7 +319,7 @@ async fn run_explain(config: Config, pid: u32) -> Result<()> {
             "model": config.ai.model,
             "max_tokens": 512,
             "messages": [{"role": "user", "content": prompt}],
-            "system": "Tu es un expert Linux. Explique brièvement ce processus. Réponds en français."
+            "system": "You are a Linux expert. Briefly explain this process. Respond in English."
         });
 
         let resp = client
@@ -337,7 +337,7 @@ async fn run_explain(config: Config, pid: u32) -> Result<()> {
                 .and_then(|a| a.first())
                 .and_then(|b| b["text"].as_str())
             {
-                println!("\n{}", " 🤖 Explication IA ".on_cyan().black().bold());
+                println!("\n{}", " 🤖 AI Explanation ".on_cyan().black().bold());
                 println!("{}\n", text);
             }
         }
@@ -361,29 +361,29 @@ fn run_kill(pid: u32, force: bool) -> Result<()> {
     if let Ok(snapshot) = collector.collect() {
         if let Some(proc) = snapshot.processes.iter().find(|p| p.pid == pid) {
             println!(
-                "\n{} Processus à tuer:",
+                "\n{} Process to kill:",
                 "⚠️".yellow()
             );
             println!("  PID:     {}", proc.pid);
-            println!("  Nom:     {}", proc.name);
+            println!("  Name:    {}", proc.name);
             println!("  Cmdline: {}", proc.cmdline);
             println!("  RAM:     {} MB", proc.rss_mb);
         }
     }
 
     println!(
-        "\nEnvoi de {} au PID {}...",
+        "\nSending {} to PID {}...",
         signal_name.bold(),
         pid.to_string().bold()
     );
 
     match nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid as i32), signal) {
         Ok(()) => {
-            println!("{} Signal envoyé avec succès.", "✅".green());
+            println!("{} Signal sent successfully.", "✅".green());
             Ok(())
         }
         Err(e) => {
-            println!("{} Échec: {}", "❌".red(), e);
+            println!("{} Failed: {}", "❌".red(), e);
             anyhow::bail!("Failed to kill process {}: {}", pid, e);
         }
     }

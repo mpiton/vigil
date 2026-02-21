@@ -34,7 +34,7 @@ impl Rule for CpuOverloadRule {
         if cpu.load_avg_5m >= max_load {
             let top = top_processes_by_cpu(snapshot, 5);
 
-            let mut details = String::from("Top consommateurs CPU :\n");
+            let mut details = String::from("Top CPU consumers:\n");
             for p in &top {
                 let _ = writeln!(
                     details,
@@ -48,7 +48,7 @@ impl Rule for CpuOverloadRule {
                 severity: Severity::High,
                 rule: "cpu_overload".to_string(),
                 title: format!(
-                    "CPU surchargé : load {:.2}/{:.2}/{:.2} ({} cœurs, seuil: {:.1})",
+                    "CPU overloaded: load {:.2}/{:.2}/{:.2} ({} cores, threshold: {:.1})",
                     cpu.load_avg_1m, cpu.load_avg_5m, cpu.load_avg_15m, cpu.core_count, max_load,
                 ),
                 details,
@@ -193,7 +193,7 @@ mod tests {
         let snapshot_above = make_snapshot(12.5, 12.1, 11.0, 8, vec![]);
         let alerts = rule.evaluate(&snapshot_above, &thresholds);
         assert_eq!(alerts.len(), 1);
-        assert!(alerts[0].title.contains("8 cœurs"));
+        assert!(alerts[0].title.contains("8 cores"));
         assert!(alerts[0].title.contains("12.0"));
     }
 }

@@ -42,15 +42,15 @@ pub async fn run_scan(
 ) -> anyhow::Result<()> {
     let snapshot = collector.collect()?;
     if let Err(e) = snapshot_store.save_snapshot(&snapshot) {
-        tracing::warn!("Échec sauvegarde snapshot : {e}");
+        tracing::warn!("Failed to save snapshot: {e}");
     }
     if let Err(e) = update_baselines(baseline_store, &snapshot) {
-        tracing::warn!("Échec mise à jour baselines : {e}");
+        tracing::warn!("Failed to update baselines: {e}");
     }
     let alerts = rule_engine.analyze(&snapshot, thresholds);
     for alert in &alerts {
         if let Err(e) = alert_store.save_alert(alert) {
-            tracing::warn!("Échec sauvegarde alerte : {e}");
+            tracing::warn!("Failed to save alert: {e}");
         }
     }
 
@@ -58,7 +58,7 @@ pub async fn run_scan(
         match analyzer.analyze(&snapshot, &alerts).await {
             Ok(diag) => diag,
             Err(e) => {
-                tracing::warn!("Analyse IA échouée : {e}");
+                tracing::warn!("AI analysis failed: {e}");
                 None
             }
         }
@@ -91,20 +91,20 @@ fn print_scan_json(
 }
 
 fn print_scan_human(alerts: &[Alert], diagnostic: Option<&AiDiagnostic>, notifier: &dyn Notifier) {
-    print_section_header("🔍 Scan système");
+    print_section_header("🔍 System scan");
     if alerts.is_empty() {
         alert_fmt::print_no_alerts();
     } else {
-        println!("{} alerte(s) détectée(s) :", alerts.len());
+        println!("{} alert(s) detected:", alerts.len());
         for alert in alerts {
             if let Err(e) = notifier.notify(alert) {
-                tracing::warn!("Échec de notification : {e}");
+                tracing::warn!("Notification failed: {e}");
             }
         }
     }
     if let Some(diag) = diagnostic {
         if let Err(e) = notifier.notify_ai_diagnostic(diag) {
-            tracing::warn!("Échec d'affichage du diagnostic IA : {e}");
+            tracing::warn!("Failed to display AI diagnostic: {e}");
         }
     }
 }

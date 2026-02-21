@@ -1,6 +1,6 @@
 # Vigil — Clean Architecture Structure
 
-## Principes
+## Principles
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -12,15 +12,15 @@
 │    │    ┌─────────────────────────────────────┐    │    │
 │    │    │            Domain                    │    │    │
 │    │    │    (Entities, Traits, Rules)          │    │    │
-│    │    │       ⟵ AUCUNE dépendance ⟶         │    │    │
+│    │    │       ⟵ NO dependencies ⟶           │    │    │
 │    │    └─────────────────────────────────────┘    │    │
 │    └───────────────────────────────────────────────┘    │
 │                    Infrastructure                       │
-│        (OS, DB, API externe, Notifications)             │
+│        (OS, DB, external API, Notifications)            │
 └─────────────────────────────────────────────────────────┘
 
-Règle d'or : les dépendances pointent vers l'intérieur.
-Le Domain ne connaît RIEN des couches extérieures.
+Golden rule: dependencies point inward.
+The Domain knows NOTHING about outer layers.
 ```
 
 ## Structure
@@ -30,16 +30,16 @@ vigil/
 ├── Cargo.toml
 ├── README.md
 ├── ARCHITECTURE.md
-├── config.default.toml              # Config de référence documentée
+├── config.default.toml              # Documented reference config
 │
 ├── src/
-│   ├── main.rs                      # Point d'entrée, wiring DI, bootstrap
-│   ├── lib.rs                       # Re-exports publics pour tests/lib usage
+│   ├── main.rs                      # Entry point, DI wiring, bootstrap
+│   ├── lib.rs                       # Public re-exports for tests/lib usage
 │   │
-│   ├── domain/                      # 🟢 CŒUR — Zéro dépendance externe
+│   ├── domain/                      # 🟢 CORE — Zero external dependencies
 │   │   ├── mod.rs
 │   │   │
-│   │   ├── entities/                # Structures de données métier
+│   │   ├── entities/                # Business data structures
 │   │   │   ├── mod.rs
 │   │   │   ├── snapshot.rs          # SystemSnapshot, MemoryInfo, CpuInfo
 │   │   │   ├── process.rs           # ProcessInfo, ProcessState
@@ -47,18 +47,18 @@ vigil/
 │   │   │   ├── journal.rs           # JournalEntry
 │   │   │   └── alert.rs             # Alert, Severity, SuggestedAction
 │   │   │
-│   │   ├── rules/                   # Règles de détection (logique pure)
+│   │   ├── rules/                   # Detection rules (pure logic)
 │   │   │   ├── mod.rs               # Trait Rule + RuleEngine
 │   │   │   ├── ram.rs               # RamWarningRule, RamCriticalRule
 │   │   │   ├── cpu.rs               # CpuOverloadRule
 │   │   │   ├── swap.rs              # SwapWarningRule
 │   │   │   ├── disk.rs              # DiskSpaceRule
 │   │   │   ├── zombie.rs            # ZombieProcessRule
-│   │   │   ├── duplicates.rs        # DuplicateProcessRule (cas MCP)
+│   │   │   ├── duplicates.rs        # DuplicateProcessRule (MCP case)
 │   │   │   ├── orphans.rs           # OrphanDevProcessRule
 │   │   │   └── oom.rs               # OomKillerRule
 │   │   │
-│   │   ├── ports/                   # Traits (interfaces) — contrats
+│   │   ├── ports/                   # Traits (interfaces) — contracts
 │   │   │   ├── mod.rs
 │   │   │   ├── collector.rs         # trait SystemCollector
 │   │   │   ├── analyzer.rs          # trait AiAnalyzer
@@ -66,74 +66,74 @@ vigil/
 │   │   │   ├── store.rs             # trait AlertStore, SnapshotStore
 │   │   │   └── process_manager.rs   # trait ProcessManager (kill, signal)
 │   │   │
-│   │   └── value_objects/           # Types valeur immuables
+│   │   └── value_objects/           # Immutable value types
 │   │       ├── mod.rs
 │   │       ├── severity.rs          # Severity (Low..Critical)
 │   │       ├── action_risk.rs       # ActionRisk (Safe, Moderate, Dangerous)
-│   │       ├── thresholds.rs        # ThresholdSet (seuils typés)
+│   │       ├── thresholds.rs        # ThresholdSet (typed thresholds)
 │   │       └── operation_mode.rs    # OperationMode (Observe, Suggest, Auto)
 │   │
 │   ├── application/                 # 🔵 ORCHESTRATION — Use cases
 │   │   ├── mod.rs
 │   │   │
-│   │   ├── services/                # Services applicatifs
+│   │   ├── services/                # Application services
 │   │   │   ├── mod.rs
-│   │   │   ├── monitor.rs           # MonitorService — boucle collect→analyze→notify
+│   │   │   ├── monitor.rs           # MonitorService — collect→analyze→notify loop
 │   │   │   ├── scanner.rs           # ScanService — one-shot scan
-│   │   │   ├── explainer.rs         # ExplainService — explain un PID via IA
-│   │   │   └── killer.rs            # KillService — kill avec log et confirmation
+│   │   │   ├── explainer.rs         # ExplainService — explain a PID via AI
+│   │   │   └── killer.rs            # KillService — kill with logging and confirmation
 │   │   │
-│   │   ├── dto/                     # Data Transfer Objects (entre couches)
+│   │   ├── dto/                     # Data Transfer Objects (between layers)
 │   │   │   ├── mod.rs
 │   │   │   ├── scan_result.rs       # ScanResult (snapshot + alerts + ai_diagnostic)
-│   │   │   ├── status_report.rs     # StatusReport (pour affichage)
+│   │   │   ├── status_report.rs     # StatusReport (for display)
 │   │   │   └── ai_request.rs        # AiAnalysisRequest, AiDiagnostic
 │   │   │
-│   │   └── config.rs               # AppConfig (validation, defaults, chargement)
+│   │   └── config.rs               # AppConfig (validation, defaults, loading)
 │   │
-│   ├── infrastructure/              # 🟠 ADAPTATEURS EXTERNES
+│   ├── infrastructure/              # 🟠 EXTERNAL ADAPTERS
 │   │   ├── mod.rs
 │   │   │
-│   │   ├── collectors/              # Implémentations de SystemCollector
+│   │   ├── collectors/              # Implementations of SystemCollector
 │   │   │   ├── mod.rs
-│   │   │   ├── sysinfo_collector.rs # Via crate sysinfo (RAM, CPU, processus)
-│   │   │   ├── procfs_collector.rs  # Via /proc pour données détaillées
-│   │   │   ├── disk_collector.rs    # Espace disque via statvfs
-│   │   │   ├── journal_collector.rs # Lecture journald via journalctl
-│   │   │   ├── gpu_collector.rs     # NVIDIA via nvml-wrapper (optionnel)
-│   │   │   └── composite.rs         # CompositeCollector (agrège tous les collectors)
+│   │   │   ├── sysinfo_collector.rs # Via sysinfo crate (RAM, CPU, processes)
+│   │   │   ├── procfs_collector.rs  # Via /proc for detailed data
+│   │   │   ├── disk_collector.rs    # Disk space via statvfs
+│   │   │   ├── journal_collector.rs # journald reading via journalctl
+│   │   │   ├── gpu_collector.rs     # NVIDIA via nvml-wrapper (optional)
+│   │   │   └── composite.rs         # CompositeCollector (aggregates all)
 │   │   │
-│   │   ├── ai/                      # Implémentations de AiAnalyzer
+│   │   ├── ai/                      # Implementations of AiAnalyzer
 │   │   │   ├── mod.rs
-│   │   │   ├── claude.rs            # ClaudeAnalyzer (API Anthropic)
-│   │   │   ├── prompt_builder.rs    # Construction des prompts
-│   │   │   └── noop.rs              # NoopAnalyzer (quand IA désactivée)
+│   │   │   ├── claude.rs            # ClaudeAnalyzer (Anthropic API)
+│   │   │   ├── prompt_builder.rs    # Prompt construction
+│   │   │   └── noop.rs              # NoopAnalyzer (when AI disabled)
 │   │   │
-│   │   ├── notifications/           # Implémentations de Notifier
+│   │   ├── notifications/           # Implementations of Notifier
 │   │   │   ├── mod.rs
-│   │   │   ├── terminal.rs          # Sortie terminal colorée (ANSI)
+│   │   │   ├── terminal.rs          # Colored terminal output (ANSI)
 │   │   │   ├── desktop.rs           # notify-rust (freedesktop)
-│   │   │   ├── log_file.rs          # JSON append dans fichier
+│   │   │   ├── log_file.rs          # JSON append to file
 │   │   │   ├── webhook.rs           # HTTP POST (Slack, Discord)
 │   │   │   └── composite.rs         # CompositeNotifier (fan-out)
 │   │   │
-│   │   ├── persistence/             # Implémentations de Store
+│   │   ├── persistence/             # Implementations of Store
 │   │   │   ├── mod.rs
 │   │   │   ├── sqlite_store.rs      # SQLite via rusqlite
-│   │   │   ├── migrations.rs        # Schéma et migrations DB
-│   │   │   └── in_memory_store.rs   # Pour tests
+│   │   │   ├── migrations.rs        # Schema and DB migrations
+│   │   │   └── in_memory_store.rs   # For testing
 │   │   │
-│   │   └── os/                      # Interactions système
+│   │   └── os/                      # System interactions
 │   │       ├── mod.rs
 │   │       ├── process_manager.rs   # Kill/signal via nix
-│   │       └── system_info.rs       # Helpers OS (uptime, hostname, etc.)
+│   │       └── system_info.rs       # OS helpers (uptime, hostname, etc.)
 │   │
-│   └── presentation/                # 🟣 INTERFACES UTILISATEUR
+│   └── presentation/                # 🟣 USER INTERFACES
 │       ├── mod.rs
 │       │
-│       ├── cli/                     # Interface ligne de commande
+│       ├── cli/                     # Command-line interface
 │       │   ├── mod.rs
-│       │   ├── app.rs               # Définition clap (Cli, Commands)
+│       │   ├── app.rs               # clap definition (Cli, Commands)
 │       │   ├── commands/
 │       │   │   ├── mod.rs
 │       │   │   ├── daemon.rs        # vigil (daemon)
@@ -144,39 +144,39 @@ vigil/
 │       │   │   └── config.rs        # vigil config [--edit]
 │       │   └── formatters/
 │       │       ├── mod.rs
-│       │       ├── status_fmt.rs    # Formatage du status (barres, couleurs)
-│       │       ├── alert_fmt.rs     # Formatage des alertes
-│       │       └── table_fmt.rs     # Formatage en tableaux
+│       │       ├── status_fmt.rs    # Status formatting (bars, colors)
+│       │       ├── alert_fmt.rs     # Alert formatting
+│       │       └── table_fmt.rs     # Table formatting
 │       │
-│       └── tui/                     # Interface terminal interactive (futur)
+│       └── tui/                     # Interactive terminal interface (future)
 │           ├── mod.rs
-│           ├── app.rs               # État et boucle ratatui
+│           ├── app.rs               # State and ratatui loop
 │           ├── widgets/
 │           │   ├── mod.rs
-│           │   ├── dashboard.rs     # Vue principale
-│           │   ├── process_list.rs  # Liste de processus
-│           │   └── alert_panel.rs   # Panneau d'alertes
-│           └── event.rs             # Gestion des événements clavier
+│           │   ├── dashboard.rs     # Main view
+│           │   ├── process_list.rs  # Process list
+│           │   └── alert_panel.rs   # Alert panel
+│           └── event.rs             # Keyboard event handling
 │
 └── tests/
     ├── integration/
-    │   ├── scan_test.rs             # Test scan end-to-end
-    │   ├── rules_test.rs            # Test des règles avec snapshots mockés
-    │   └── ai_test.rs               # Test intégration IA (avec mock HTTP)
+    │   ├── scan_test.rs             # End-to-end scan test
+    │   ├── rules_test.rs            # Rule tests with mocked snapshots
+    │   └── ai_test.rs               # AI integration test (with HTTP mock)
     │
     └── fixtures/
-        ├── snapshot_normal.json     # Snapshot système sain
+        ├── snapshot_normal.json     # Healthy system snapshot
         ├── snapshot_ram_critical.json
-        ├── snapshot_mcp_zombies.json # Cas MCP Python en boucle
+        ├── snapshot_mcp_zombies.json # MCP Python in loop case
         └── snapshot_oom.json
 ```
 
-## Responsabilités par couche
+## Responsibilities per Layer
 
-### 🟢 Domain — Le cœur pur
+### 🟢 Domain — The Pure Core
 
-**Zéro `use` externe** (pas de tokio, sysinfo, reqwest, etc.).
-Uniquement `std`, `serde` (pour dériver Serialize/Deserialize), `chrono`, `thiserror`.
+**Zero external `use`** (no tokio, sysinfo, reqwest, etc.).
+Only `std`, `serde` (for Serialize/Deserialize derive), `chrono`, `thiserror`.
 
 ```rust
 // domain/ports/collector.rs
@@ -220,7 +220,7 @@ pub trait SnapshotStore: Send + Sync {
 ```
 
 ```rust
-// domain/rules/mod.rs — Chaque règle est une fonction pure
+// domain/rules/mod.rs — Each rule is a pure function
 use crate::domain::entities::{alert::Alert, snapshot::SystemSnapshot};
 use crate::domain::value_objects::thresholds::ThresholdSet;
 
@@ -250,23 +250,23 @@ impl RuleEngine {
 ```
 
 ```rust
-// domain/rules/duplicates.rs — Exemple de règle pure
+// domain/rules/duplicates.rs — Example of pure rule
 pub struct DuplicateProcessRule;
 
 impl Rule for DuplicateProcessRule {
     fn name(&self) -> &str { "duplicate_processes" }
 
     fn evaluate(&self, snapshot: &SystemSnapshot, thresholds: &ThresholdSet) -> Vec<Alert> {
-        // Logique pure : grouper, compter, alerter
-        // Aucun accès système, aucun I/O
+        // Pure logic: group, count, alert
+        // No system access, no I/O
     }
 }
 ```
 
 ### 🔵 Application — Orchestration
 
-Dépend du Domain (traits + entities). Ne connaît PAS les implémentations concrètes.
-Reçoit les dépendances par injection (constructeur).
+Depends on Domain (traits + entities). Does NOT know concrete implementations.
+Receives dependencies via injection (constructor).
 
 ```rust
 // application/services/monitor.rs
@@ -312,9 +312,9 @@ where
 }
 ```
 
-### 🟠 Infrastructure — Le monde réel
+### 🟠 Infrastructure — The Real World
 
-Implémente les traits du Domain. Contient TOUTES les dépendances externes.
+Implements Domain traits. Contains ALL external dependencies.
 
 ```rust
 // infrastructure/collectors/sysinfo_collector.rs
@@ -359,14 +359,14 @@ impl AiAnalyzer for NoopAnalyzer {
     async fn analyze(&mut self, _: &SystemSnapshot, _: &[Alert])
         -> Result<Option<AiDiagnostic>, AnalysisError>
     {
-        Ok(None) // IA désactivée
+        Ok(None) // AI disabled
     }
 }
 ```
 
-### 🟣 Presentation — Interface utilisateur
+### 🟣 Presentation — User Interface
 
-Dépend de Application (services, DTOs). Convertit les DTOs en affichage.
+Depends on Application (services, DTOs). Converts DTOs to display.
 
 ```rust
 // presentation/cli/commands/scan.rs
@@ -386,15 +386,15 @@ pub async fn execute(service: &mut ScanService<...>, args: &ScanArgs) -> Result<
 }
 ```
 
-### main.rs — Le câblage (Composition Root)
+### main.rs — The Wiring (Composition Root)
 
 ```rust
-// main.rs — Seul endroit qui connaît TOUTES les implémentations concrètes
+// main.rs — Only place that knows ALL concrete implementations
 #[tokio::main]
 async fn main() -> Result<()> {
     let config = AppConfig::load()?;
 
-    // Injection de dépendances manuelle (pas besoin de framework DI en Rust)
+    // Manual dependency injection (no DI framework needed in Rust)
     let collector = SysinfoCollector::new();
     let notifier = CompositeNotifier::from_config(&config.notifications);
     let store = SqliteStore::open(&config.database_path)?;
@@ -432,7 +432,7 @@ async fn main() -> Result<()> {
 }
 ```
 
-## Flux de dépendances
+## Dependency Flow
 
 ```
 main.rs (composition root)
@@ -440,33 +440,33 @@ main.rs (composition root)
    ├── presentation/cli ──→ application/services ──→ domain/ports (traits)
    │                                                      ↑
    └── infrastructure/* ──────────────────────────────────┘
-                         (implémente les traits)
+                         (implements traits)
 ```
 
-**Jamais** :
+**Never:**
 - ❌ domain → infrastructure
 - ❌ domain → presentation
-- ❌ application → infrastructure (directement)
-- ❌ presentation → infrastructure (directement)
+- ❌ application → infrastructure (directly)
+- ❌ presentation → infrastructure (directly)
 
-**Toujours** :
-- ✅ infrastructure → domain (implémente les ports)
-- ✅ application → domain (utilise les ports/entities)
-- ✅ presentation → application (appelle les services)
-- ✅ main.rs → tout (câblage unique)
+**Always:**
+- ✅ infrastructure → domain (implements ports)
+- ✅ application → domain (uses ports/entities)
+- ✅ presentation → application (calls services)
+- ✅ main.rs → everything (unique wiring)
 
-## Testabilité
+## Testability
 
-Grâce aux traits, chaque couche se teste indépendamment :
+Thanks to traits, each layer tests independently:
 
 ```
 tests/
-├── integration/           # Tests end-to-end avec vrais composants
-├── fixtures/              # Snapshots JSON pour alimenter les tests
+├── integration/           # End-to-end tests with real components
+├── fixtures/              # JSON snapshots to feed tests
 ```
 
 ```rust
-// Test unitaire d'une règle (logique pure, pas de mock)
+// Unit test of a rule (pure logic, no mock)
 #[test]
 fn duplicate_rule_detects_mcp_storm() {
     let snapshot = load_fixture("snapshot_mcp_zombies.json");
@@ -480,7 +480,7 @@ fn duplicate_rule_detects_mcp_storm() {
     assert!(alerts[0].title.contains("python"));
 }
 
-// Test d'un service avec mocks
+// Test of a service with mocks
 #[tokio::test]
 async fn monitor_notifies_on_critical_ram() {
     let collector = MockCollector::with_snapshot(critical_ram_snapshot());

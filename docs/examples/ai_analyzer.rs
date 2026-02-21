@@ -52,7 +52,7 @@ impl AiAnalyzer {
                     "content": prompt
                 }
             ],
-            "system": "Tu es un expert Linux sysadmin. Tu analyses des situations système et proposes des actions correctives. Réponds UNIQUEMENT en JSON valide, sans markdown ni backticks. Le JSON doit suivre ce schéma : {\"diagnostic\": \"string\", \"severity\": \"critical|high|medium|low\", \"actions\": [{\"type\": \"string\", \"target\": \"string\", \"command\": \"string\", \"risk\": \"safe|moderate|dangerous\", \"explanation\": \"string\"}], \"prevention\": \"string\"}"
+            "system": "You are a Linux sysadmin expert. You analyze system situations and propose corrective actions. Respond ONLY in valid JSON, no markdown or backticks. JSON must follow this schema: {\"diagnostic\": \"string\", \"severity\": \"critical|high|medium|low\", \"actions\": [{\"type\": \"string\", \"target\": \"string\", \"command\": \"string\", \"risk\": \"safe|moderate|dangerous\", \"explanation\": \"string\"}], \"prevention\": \"string\"}"
         });
 
         let response = self
@@ -171,27 +171,27 @@ impl AiAnalyzer {
             .join("\n");
 
         format!(
-            r#"Analyse cette situation système Linux et propose des actions correctives.
+            r#"Analyze this Linux system situation and propose corrective actions.
 
-## État système
-- RAM: {used_mb}/{total_mb} MB ({usage_pct:.1}%), disponible: {avail_mb} MB
+## System Status
+- RAM: {used_mb}/{total_mb} MB ({usage_pct:.1}%), available: {avail_mb} MB
 - Swap: {swap_used}/{swap_total} MB ({swap_pct:.1}%)
-- CPU: load {load1:.2}/{load5:.2}/{load15:.2} ({cores} cœurs), usage global: {cpu_usage:.1}%
-- Processus totaux: {proc_count}
+- CPU: load {load1:.2}/{load5:.2}/{load15:.2} ({cores} cores), global usage: {cpu_usage:.1}%
+- Total processes: {proc_count}
 
-## Top processus par RAM
+## Top processes by RAM
 {top_ram}
 
-## Top processus par CPU
+## Top processes by CPU
 {top_cpu}
 
-## Alertes détectées par les règles
+## Alerts detected by rules
 {alerts_summary}
 
-## Derniers journaux système (warning+)
+## Recent system logs (warning+)
 {journal}
 
-Analyse la situation, identifie la cause racine, et propose des actions concrètes."#,
+Analyze the situation, identify the root cause, and propose concrete actions."#,
             used_mb = mem.used_mb,
             total_mb = mem.total_mb,
             usage_pct = mem.usage_percent,
@@ -209,7 +209,7 @@ Analyse la situation, identifie la cause racine, et propose des actions concrèt
             top_cpu = top_cpu,
             alerts_summary = alerts_summary,
             journal = if journal.is_empty() {
-                "  (aucune entrée récente)".into()
+                "  (no recent entries)".into()
             } else {
                 journal
             },
