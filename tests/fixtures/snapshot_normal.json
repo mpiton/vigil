@@ -1,0 +1,91 @@
+{
+  "timestamp": "2026-02-20T10:00:00Z",
+  "memory": {
+    "total_mb": 16384,
+    "used_mb": 8000,
+    "available_mb": 8384,
+    "swap_total_mb": 8192,
+    "swap_used_mb": 0,
+    "usage_percent": 48.8,
+    "swap_percent": 0.0
+  },
+  "cpu": {
+    "global_usage_percent": 15.0,
+    "per_core_usage": [12.0, 18.0, 14.0, 16.0],
+    "core_count": 4,
+    "load_avg_1m": 1.2,
+    "load_avg_5m": 0.8,
+    "load_avg_15m": 0.5
+  },
+  "processes": [
+    {
+      "pid": 1,
+      "ppid": 0,
+      "name": "systemd",
+      "cmdline": "/sbin/init",
+      "state": "Sleeping",
+      "cpu_percent": 0.1,
+      "rss_mb": 12,
+      "vms_mb": 200,
+      "user": "root",
+      "start_time": 1708400000,
+      "open_fds": 150
+    },
+    {
+      "pid": 1024,
+      "ppid": 1,
+      "name": "sshd",
+      "cmdline": "/usr/sbin/sshd -D",
+      "state": "Sleeping",
+      "cpu_percent": 0.0,
+      "rss_mb": 5,
+      "vms_mb": 80,
+      "user": "root",
+      "start_time": 1708400100,
+      "open_fds": 10
+    },
+    {
+      "pid": 2048,
+      "ppid": 1,
+      "name": "nginx",
+      "cmdline": "nginx: master process /usr/sbin/nginx",
+      "state": "Sleeping",
+      "cpu_percent": 0.2,
+      "rss_mb": 30,
+      "vms_mb": 150,
+      "user": "www-data",
+      "start_time": 1708400200,
+      "open_fds": 25
+    }
+  ],
+  "disks": [
+    {
+      "mount_point": "/",
+      "total_gb": 500.0,
+      "available_gb": 300.0,
+      "usage_percent": 40.0,
+      "filesystem": "ext4"
+    },
+    {
+      "mount_point": "/home",
+      "total_gb": 1000.0,
+      "available_gb": 600.0,
+      "usage_percent": 40.0,
+      "filesystem": "ext4"
+    }
+  ],
+  "journal_entries": [
+    {
+      "timestamp": "2026-02-20T09:55:00Z",
+      "priority": 6,
+      "unit": "sshd.service",
+      "message": "Accepted publickey for user from 192.168.1.10 port 22"
+    },
+    {
+      "timestamp": "2026-02-20T09:58:00Z",
+      "priority": 6,
+      "unit": "nginx.service",
+      "message": "Started nginx web server"
+    }
+  ]
+}
