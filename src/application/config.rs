@@ -286,16 +286,34 @@ impl Default for DatabaseConfig {
 
 // --- AppConfig methods ---
 
+/// System-wide configuration path used by the systemd service.
+const SYSTEM_CONFIG_PATH: &str = "/etc/vigil/config.toml";
+
 impl AppConfig {
-    /// Load config from default path or create default config file
+    /// Load config from default path or create default config file.
+    ///
+    /// Resolution order:
+    /// 1. User config: `~/.config/vigil/config.toml`
+    /// 2. System config: `/etc/vigil/config.toml`
+    /// 3. Create default user config if neither exists
     ///
     /// # Errors
     ///
     /// Returns an error if the config directory cannot be determined,
     /// the file cannot be read, or the TOML content is invalid.
     pub fn load() -> Result<Self> {
-        let path = Self::config_path()?;
-        Self::load_or_create(&path)
+        let user_path = Self::config_path()?;
+        if user_path.exists() {
+            return Self::load_from(&user_path);
+        }
+        let system_path = Path::new(SYSTEM_CONFIG_PATH);
+        if system_path.exists() {
+            match Self::load_from(system_path) {
+                Ok(config) => return Ok(config),
+                Err(e) => tracing::warn!("Cannot read system config {SYSTEM_CONFIG_PATH}: {e}"),
+            }
+        }
+        Self::load_or_create(&user_path)
     }
 
     /// Load from a specific path, or create a default config file if missing
@@ -630,6 +648,11 @@ claude_binary = "/home/user/.local/bin/claude"
     fn claude_binary_defaults_to_claude() {
         let config: AppConfig = toml::from_str("").expect("parse empty toml");
         assert_eq!(config.ai.claude_binary, "claude");
+    }
+
+    #[test]
+    fn system_config_path_is_etc_vigil() {
+        assert_eq!(SYSTEM_CONFIG_PATH, "/etc/vigil/config.toml");
     }
 
     #[test]

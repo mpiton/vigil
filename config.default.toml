@@ -1,5 +1,6 @@
 # Vigil — Reference configuration
-# Copy to ~/.config/vigil/config.toml to customize
+# User config: ~/.config/vigil/config.toml
+# System config (systemd): /etc/vigil/config.toml
 
 [general]
 mode = "suggest"           # observe | suggest | auto
@@ -22,6 +23,7 @@ enabled = true
 provider = "claude-cli"    # claude-cli | ollama | noop
 model = "claude-sonnet-4-20250514"
 cooldown_secs = 60
+# claude_binary = "/home/user/.local/bin/claude"  # Full path for systemd
 # ollama_url = "http://localhost:11434"  # Uncomment for ollama
 
 [notifications]
