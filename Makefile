@@ -8,9 +8,13 @@ CONFIG_DIR := /etc/vigil
 build:
 	cargo build --release
 
-install: build
+install:
 	@if [ "$$(id -u)" != "0" ]; then \
 		echo "Error: this command requires root privileges (sudo make install)"; \
+		exit 1; \
+	fi
+	@if [ ! -f target/release/$(BINARY_NAME) ]; then \
+		echo "Error: release binary not found. Run 'make build' first."; \
 		exit 1; \
 	fi
 	./contrib/install.sh
