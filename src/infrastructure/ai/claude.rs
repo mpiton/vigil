@@ -19,6 +19,7 @@ const MAX_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
 const MAX_STDERR_BYTES: usize = 512;
 
 pub struct ClaudeCliAnalyzer {
+    binary: String,
     cooldown_secs: u64,
     last_call: Mutex<Option<Instant>>,
     model: String,
@@ -27,8 +28,9 @@ pub struct ClaudeCliAnalyzer {
 
 impl ClaudeCliAnalyzer {
     #[must_use]
-    pub const fn new(model: String, cooldown_secs: u64, timeout_secs: u64) -> Self {
+    pub const fn new(binary: String, model: String, cooldown_secs: u64, timeout_secs: u64) -> Self {
         Self {
+            binary,
             cooldown_secs,
             last_call: Mutex::new(None),
             model,
@@ -58,7 +60,7 @@ impl ClaudeCliAnalyzer {
     async fn run_claude_cli(&self, prompt: &str) -> Result<Vec<u8>, AnalysisError> {
         let output = tokio::time::timeout(
             Duration::from_secs(self.timeout_secs),
-            tokio::process::Command::new("claude")
+            tokio::process::Command::new(&self.binary)
                 .args([
                     "--print",
                     "--output-format",
@@ -298,7 +300,9 @@ mod tests {
 
     #[test]
     fn new_constructs_correctly() {
-        let analyzer = ClaudeCliAnalyzer::new("test-model".into(), 60, 30);
+        let analyzer =
+            ClaudeCliAnalyzer::new("/usr/bin/claude".into(), "test-model".into(), 60, 30);
+        assert_eq!(analyzer.binary, "/usr/bin/claude");
         assert_eq!(analyzer.model, "test-model");
         assert_eq!(analyzer.cooldown_secs, 60);
         assert_eq!(analyzer.timeout_secs, 30);
@@ -306,13 +310,13 @@ mod tests {
 
     #[test]
     fn try_claim_returns_true_initially() {
-        let analyzer = ClaudeCliAnalyzer::new("m".into(), 60, 30);
+        let analyzer = ClaudeCliAnalyzer::new("claude".into(), "m".into(), 60, 30);
         assert!(analyzer.try_claim().expect("should not error"));
     }
 
     #[test]
     fn try_claim_returns_false_within_cooldown() {
-        let analyzer = ClaudeCliAnalyzer::new("m".into(), 3600, 30);
+        let analyzer = ClaudeCliAnalyzer::new("claude".into(), "m".into(), 3600, 30);
         // First claim succeeds and sets the timestamp
         assert!(analyzer.try_claim().expect("first claim"));
         // Second claim within cooldown fails
@@ -321,7 +325,7 @@ mod tests {
 
     #[test]
     fn try_claim_returns_true_after_cooldown() {
-        let analyzer = ClaudeCliAnalyzer::new("m".into(), 0, 30);
+        let analyzer = ClaudeCliAnalyzer::new("claude".into(), "m".into(), 0, 30);
         // First claim succeeds
         assert!(analyzer.try_claim().expect("first claim"));
         // With 0 cooldown, immediate second claim succeeds
@@ -330,7 +334,7 @@ mod tests {
 
     #[test]
     fn try_claim_is_atomic() {
-        let analyzer = ClaudeCliAnalyzer::new("m".into(), 3600, 30);
+        let analyzer = ClaudeCliAnalyzer::new("claude".into(), "m".into(), 3600, 30);
         // After claiming, the timestamp is immediately set
         assert!(analyzer.try_claim().expect("claim"));
         assert!(analyzer.last_call.lock().expect("lock").is_some());

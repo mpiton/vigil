@@ -18,6 +18,7 @@ pub fn create_ai_analyzer(config: &AiConfig) -> Box<dyn AiAnalyzer> {
     }
     match config.provider.trim() {
         "claude-cli" => Box::new(ClaudeCliAnalyzer::new(
+            config.claude_binary.clone(),
             config.model.clone(),
             config.cooldown_secs,
             config.timeout_secs,

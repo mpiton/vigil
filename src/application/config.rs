@@ -72,6 +72,8 @@ pub struct AiConfig {
     pub timeout_secs: u64,
     #[serde(default)]
     pub ollama_url: Option<String>,
+    #[serde(default = "default_claude_binary")]
+    pub claude_binary: String,
 }
 
 /// Notification channels: desktop, terminal, log file, webhook.
@@ -179,6 +181,10 @@ const fn default_timeout() -> u64 {
     120
 }
 
+fn default_claude_binary() -> String {
+    "claude".into()
+}
+
 fn default_ignore_commands() -> Vec<String> {
     vec![
         "systemd".into(),
@@ -243,6 +249,7 @@ impl Default for AiConfig {
             cooldown_secs: default_cooldown(),
             timeout_secs: default_timeout(),
             ollama_url: None,
+            claude_binary: default_claude_binary(),
         }
     }
 }
@@ -403,6 +410,7 @@ mod tests {
         assert_eq!(config.ai.provider, "claude-cli");
         assert!(config.ai.enabled);
         assert!(config.ai.ollama_url.is_none());
+        assert_eq!(config.ai.claude_binary, "claude");
         assert_eq!(config.ai.cooldown_secs, 60);
         assert!(config.notifications.desktop);
         assert!(config.notifications.terminal);
@@ -606,6 +614,22 @@ interval_secs = 42
             thresholds.disk_warning,
             thresholds.disk_critical
         );
+    }
+
+    #[test]
+    fn claude_binary_configurable_via_toml() {
+        let toml_str = r#"
+[ai]
+claude_binary = "/home/user/.local/bin/claude"
+"#;
+        let config: AppConfig = toml::from_str(toml_str).expect("parse toml with claude_binary");
+        assert_eq!(config.ai.claude_binary, "/home/user/.local/bin/claude");
+    }
+
+    #[test]
+    fn claude_binary_defaults_to_claude() {
+        let config: AppConfig = toml::from_str("").expect("parse empty toml");
+        assert_eq!(config.ai.claude_binary, "claude");
     }
 
     #[test]
