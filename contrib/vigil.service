@@ -4,6 +4,7 @@ After=network.target
 
 [Service]
 Type=simple
+# User= is set by install.sh to the installing user
 ExecStart=/usr/local/bin/vigil
 Restart=on-failure
 RestartSec=10
