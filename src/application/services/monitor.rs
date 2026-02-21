@@ -76,7 +76,11 @@ impl<'a> MonitorService<'a> {
     ///
     /// Returns an error if the system metrics collection fails.
     pub async fn run_once(&self) -> anyhow::Result<MonitorCycleResult> {
-        let snapshot = self.collector.collect()?;
+        let mut snapshot = self.collector.collect()?;
+
+        // Exclude own process to prevent self-detection and kill loops
+        let own_pid = std::process::id();
+        snapshot.processes.retain(|p| p.pid != own_pid);
 
         let snapshot_saved = match self.snapshot_store.save_snapshot(&snapshot) {
             Ok(()) => true,
@@ -285,6 +289,7 @@ mod tests {
     use super::*;
     use crate::domain::entities::alert::{Alert, SuggestedAction};
     use crate::domain::entities::diagnostic::AiDiagnostic;
+    use crate::domain::entities::process::{ProcessInfo, ProcessState};
     use crate::domain::entities::snapshot::{CpuInfo, MemoryInfo, SystemSnapshot};
     use crate::domain::ports::analyzer::AnalysisError;
     use crate::domain::ports::collector::CollectionError;
@@ -1533,5 +1538,104 @@ mod tests {
             .expect("mutex poisoned")
             .clone();
         assert!(logs.is_empty());
+    }
+
+    #[tokio::test]
+    async fn run_once_excludes_own_pid_from_snapshot() {
+        struct SelfProcessCollector;
+
+        impl SystemCollector for SelfProcessCollector {
+            fn collect(&self) -> Result<SystemSnapshot, CollectionError> {
+                Ok(SystemSnapshot {
+                    timestamp: Utc::now(),
+                    memory: MemoryInfo {
+                        total_mb: 16384,
+                        used_mb: 4000,
+                        available_mb: 12384,
+                        swap_total_mb: 8192,
+                        swap_used_mb: 0,
+                        usage_percent: 24.4,
+                        swap_percent: 0.0,
+                    },
+                    cpu: CpuInfo {
+                        global_usage_percent: 10.0,
+                        per_core_usage: vec![10.0],
+                        core_count: 4,
+                        load_avg_1m: 0.5,
+                        load_avg_5m: 0.4,
+                        load_avg_15m: 0.3,
+                    },
+                    processes: vec![
+                        ProcessInfo {
+                            pid: std::process::id(),
+                            ppid: 1,
+                            name: "vigil".to_string(),
+                            cmdline: "vigil daemon".to_string(),
+                            state: ProcessState::Running,
+                            cpu_percent: 5.0,
+                            rss_mb: 100,
+                            vms_mb: 200,
+                            user: "root".to_string(),
+                            start_time: 0,
+                            open_fds: 10,
+                        },
+                        ProcessInfo {
+                            pid: 9999,
+                            ppid: 1,
+                            name: "nginx".to_string(),
+                            cmdline: "/usr/sbin/nginx".to_string(),
+                            state: ProcessState::Running,
+                            cpu_percent: 2.0,
+                            rss_mb: 50,
+                            vms_mb: 100,
+                            user: "www-data".to_string(),
+                            start_time: 0,
+                            open_fds: 20,
+                        },
+                    ],
+                    disks: vec![],
+                    journal_entries: vec![],
+                })
+            }
+        }
+
+        let collector = SelfProcessCollector;
+        let rule_engine = RuleEngine::new(vec![]);
+        let thresholds = ThresholdSet::default();
+        let analyzer = MockAnalyzer;
+        let notifier = MockNotifier;
+        let alert_store = MockAlertStore::new();
+        let snapshot_store = MockSnapshotStore::new();
+        let baseline_store = InMemoryStore::new();
+        let action_log_store = InMemoryStore::new();
+        let protected: Vec<String> = vec![];
+        let service = MonitorService::new(
+            &collector,
+            &rule_engine,
+            &thresholds,
+            &analyzer,
+            &notifier,
+            &alert_store,
+            &snapshot_store,
+            &baseline_store,
+            &action_log_store,
+            &protected,
+            false,
+            OperationMode::Observe,
+        );
+
+        let result = service.run_once().await;
+        assert!(result.is_ok());
+
+        let saved = snapshot_store
+            .snapshots
+            .lock()
+            .expect("mutex poisoned")
+            .last()
+            .cloned()
+            .expect("no snapshot saved");
+        assert_eq!(saved.processes.len(), 1);
+        assert_eq!(saved.processes[0].pid, 9999);
+        assert!(!saved.processes.iter().any(|p| p.pid == std::process::id()));
     }
 }
